@@ -17,7 +17,7 @@
 #  项目地址: https://github.com/Zyx0rx/vless-all-in-one
 #═══════════════════════════════════════════════════════════════════════════════
 
-readonly VERSION="3.5.3"
+readonly VERSION="3.5.4"
 readonly AUTHOR="Zyx0rx"
 readonly REPO_URL="https://github.com/Zyx0rx/vless-all-in-one"
 readonly SCRIPT_REPO="Zyx0rx/vless-all-in-one"
@@ -22010,9 +22010,10 @@ gen_surge_sub() {
             local psk=$(echo "$cfg" | jq -r '.psk // empty')
             local version=$(echo "$cfg" | jq -r '.version // empty')
             
+            local stls_password=$(echo "$cfg" | jq -r '.stls_password // empty')
             local name="${country_code}-$(get_protocol_name $protocol)-${ip_suffix}"
             local proxy=""
-            
+
             case "$protocol" in
                 trojan)
                     [[ -n "$server_ip" ]] && proxy="$name = trojan, $server_ip, $port, password=$password, sni=$sni, skip-cert-verify=true"
@@ -22032,9 +22033,11 @@ gen_surge_sub() {
                 anytls)
                     [[ -n "$server_ip" ]] && proxy="$name = anytls, $server_ip, $port, password=$password, sni=$sni, skip-cert-verify=true"
                     ;;
-                snell|snell-v5|snell-shadowtls|snell-v5-shadowtls)
-                    # Snell 和 Snell+ShadowTLS 都使用相同的 Surge 配置格式
+                snell|snell-v5)
                     [[ -n "$server_ip" ]] && proxy="$name = snell, $server_ip, $port, psk=$psk, version=${version:-4}"
+                    ;;
+                snell-shadowtls|snell-v5-shadowtls)
+                    [[ -n "$server_ip" ]] && proxy="$name = snell, $server_ip, $port, psk=$psk, version=${version:-4}, reuse=true, tfo=true, shadow-tls-password=$stls_password, shadow-tls-sni=$sni, shadow-tls-version=3"
                     ;;
             esac
             
