@@ -1,6 +1,6 @@
 #!/bin/bash 
 #═══════════════════════════════════════════════════════════════════════════════
-#  多协议代理一键部署脚本 v3.5.5 [服务端]
+#  多协议代理一键部署脚本 v3.5.6 [服务端]
 #  
 #  架构升级:
 #    • Xray 核心: 处理 TCP/TLS 协议 (VLESS/VMess/Trojan/SOCKS/SS2022)
@@ -14,14 +14,14 @@
 #  
 #  
 #  作者: Zyx0rx
-#  项目地址: https://github.com/Zyx0rx/vless-all-in-one
+#  项目地址: https://github.com/afsfge/vless-all-in-one
 #═══════════════════════════════════════════════════════════════════════════════
 
-readonly VERSION="3.5.5"
-readonly AUTHOR="Zyx0rx"
-readonly REPO_URL="https://github.com/Zyx0rx/vless-all-in-one"
-readonly SCRIPT_REPO="Zyx0rx/vless-all-in-one"
-readonly SCRIPT_RAW_URL="https://raw.githubusercontent.com/Zyx0rx/vless-all-in-one/main/vless-server.sh"
+readonly VERSION="3.5.6"
+readonly AUTHOR="afsfge"
+readonly REPO_URL="https://github.com/afsfge/vless-all-in-one"
+readonly SCRIPT_REPO="afsfge/vless-all-in-one"
+readonly SCRIPT_RAW_URL="https://raw.githubusercontent.com/afsfge/vless-all-in-one/main/vless-server.sh"
 readonly CFG="/etc/vless-reality"
 readonly ACME_DEFAULT_EMAIL="acme@vaio.com"
 
@@ -5855,8 +5855,8 @@ gen_snell_link() {
     local ip="$1" port="$2" psk="$3" version="${4:-4}" country="${5:-}"
     local ip_type=$(_ip_type_label "$ip")
     local name="${country:+${country}-}Snell-${ip_type}"
-    # Snell 没有标准URI格式，使用自定义格式
-    printf '%s\n' "snell://${psk}@${ip}:${port}?version=${version}#${name}"
+    local clean_ip="${ip#[}"; clean_ip="${clean_ip%]}"
+    printf '%s\n' "snell://${psk}@${clean_ip}:${port}?version=${version}#${name}"
 }
 
 gen_tuic_link() {
@@ -22076,10 +22076,16 @@ gen_surge_sub() {
                     [[ -n "$server_ip" ]] && proxy="$name = anytls, $server_ip, $port, password=$password, sni=$sni, skip-cert-verify=true"
                     ;;
                 snell|snell-v5)
-                    [[ -n "$server_ip" ]] && proxy="$name = snell, $server_ip, $port, psk=$psk, version=${version:-4}"
+                    if [[ -n "$server_ip" ]]; then
+                        local _snell_ip="${server_ip#[}"; _snell_ip="${_snell_ip%]}"
+                        proxy="$name = snell, $_snell_ip, $port, psk=$psk, version=${version:-4}"
+                    fi
                     ;;
                 snell-shadowtls|snell-v5-shadowtls)
-                    [[ -n "$server_ip" ]] && proxy="$name = snell, $server_ip, $port, psk=$psk, version=${version:-4}, reuse=true, tfo=true, shadow-tls-password=$stls_password, shadow-tls-sni=$sni, shadow-tls-version=3"
+                    if [[ -n "$server_ip" ]]; then
+                        local _snell_ip="${server_ip#[}"; _snell_ip="${_snell_ip%]}"
+                        proxy="$name = snell, $_snell_ip, $port, psk=$psk, version=${version:-4}, reuse=true, tfo=true, shadow-tls-password=$stls_password, shadow-tls-sni=$sni, shadow-tls-version=3"
+                    fi
                     ;;
             esac
             
