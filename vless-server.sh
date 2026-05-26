@@ -1,6 +1,6 @@
 #!/bin/bash 
 #═══════════════════════════════════════════════════════════════════════════════
-#  多协议代理一键部署脚本 v3.5.6 [服务端]
+#  多协议代理一键部署脚本 v3.5.7 [服务端]
 #  
 #  架构升级:
 #    • Xray 核心: 处理 TCP/TLS 协议 (VLESS/VMess/Trojan/SOCKS/SS2022)
@@ -17,7 +17,7 @@
 #  项目地址: https://github.com/afsfge/vless-all-in-one
 #═══════════════════════════════════════════════════════════════════════════════
 
-readonly VERSION="3.5.6"
+readonly VERSION="3.5.7"
 readonly AUTHOR="afsfge"
 readonly REPO_URL="https://github.com/afsfge/vless-all-in-one"
 readonly SCRIPT_REPO="afsfge/vless-all-in-one"
@@ -5696,6 +5696,23 @@ _ip_type_label() {
     [[ "$ip" == *:* ]] && echo "IPv6" || echo "IPv4"
 }
 
+# 将 2 字母 ISO 国家码转为旗帜 emoji（Regional Indicator 符号对）
+_country_flag() {
+    local code="${1^^}"
+    [[ ${#code} -ne 2 || ! "$code" =~ ^[A-Z]{2}$ ]] && return
+    local a_cp b_cp
+    a_cp=$(printf '%08X' $(( $(printf '%d' "'${code:0:1}") - 65 + 0x1F1E6 )))
+    b_cp=$(printf '%08X' $(( $(printf '%d' "'${code:1:1}") - 65 + 0x1F1E6 )))
+    printf "\U${a_cp}\U${b_cp}"
+}
+
+# 返回 "🇺🇸US-" 格式前缀，国家码为空时返回空字符串
+_country_prefix() {
+    local code="$1"
+    [[ -z "$code" ]] && return
+    printf '%s%s-' "$(_country_flag "$code")" "$code"
+}
+
 # 订阅节点使用的短协议名
 _sub_proto_label() {
     case "$1" in
@@ -5724,27 +5741,27 @@ _sub_proto_label() {
 gen_vless_link() {
     local ip="$1" port="$2" uuid="$3" pbk="$4" sid="$5" sni="$6" country="${7:-}"
     local ip_type=$(_ip_type_label "$ip")
-    local name="${country:+${country}-}Vless-${ip_type}"
+    local name="$(_country_prefix "$country")Vless-${ip_type}"
     printf '%s\n' "vless://${uuid}@${ip}:${port}?encryption=none&security=reality&type=tcp&sni=${sni}&fp=chrome&pbk=${pbk}&sid=${sid}&flow=xtls-rprx-vision#${name}"
 }
 
 gen_vless_encryption_link() {
     local ip="$1" port="$2" uuid="$3" encryption="$4" country="${5:-}"
     local ip_type=$(_ip_type_label "$ip")
-    local name="${country:+${country}-}Vless-${ip_type}"
+    local name="$(_country_prefix "$country")Vless-${ip_type}"
     printf '%s\n' "vless://${uuid}@${ip}:${port}?encryption=${encryption}&security=none&type=tcp#${name}"
 }
 
 gen_vless_xhttp_link() {
     local ip="$1" port="$2" uuid="$3" pbk="$4" sid="$5" sni="$6" path="${7:-/}" country="${8:-}"
     local ip_type=$(_ip_type_label "$ip")
-    local name="${country:+${country}-}Vless-XHTTP-${ip_type}"
+    local name="$(_country_prefix "$country")Vless-XHTTP-${ip_type}"
     printf '%s\n' "vless://${uuid}@${ip}:${port}?encryption=none&security=reality&type=xhttp&sni=${sni}&fp=chrome&pbk=${pbk}&sid=${sid}&path=$(urlencode "$path")&mode=auto#${name}"
 }
 
 gen_vless_xhttp_cdn_link() {
     local domain="$1" port="$2" uuid="$3" path="${4:-/}" country="${5:-}"
-    local name="${country:+${country}-}XHTTP-CDN"
+    local name="$(_country_prefix "$country")XHTTP-CDN"
     printf '%s\n' "vless://${uuid}@${domain}:${port}?encryption=none&security=tls&type=xhttp&sni=${domain}&host=${domain}&path=$(urlencode "$path")&mode=auto#${name}"
 }
 
@@ -5753,7 +5770,7 @@ gen_vmess_ws_link() {
     local clean_ip="${ip#[}"
     clean_ip="${clean_ip%]}"
     local ip_type=$(_ip_type_label "$ip")
-    local name="${country:+${country}-}VMess-${ip_type}"
+    local name="$(_country_prefix "$country")VMess-${ip_type}"
 
     # VMess ws 链接：vmess://base64(json)
     # 注意：allowInsecure 必须是字符串 "true"，不是布尔值
@@ -5791,7 +5808,7 @@ _can_gen_qr() {
 gen_hy2_link() {
     local ip="$1" port="$2" password="$3" sni="$4" country="${5:-}"
     local ip_type=$(_ip_type_label "$ip")
-    local name="${country:+${country}-}Hy2-${ip_type}"
+    local name="$(_country_prefix "$country")Hy2-${ip_type}"
     # 链接始终使用实际端口，端口跳跃需要客户端手动配置
     printf '%s\n' "hysteria2://${password}@${ip}:${port}?sni=${sni}&insecure=1#${name}"
 }
@@ -5799,21 +5816,21 @@ gen_hy2_link() {
 gen_trojan_link() {
     local ip="$1" port="$2" password="$3" sni="$4" country="${5:-}"
     local ip_type=$(_ip_type_label "$ip")
-    local name="${country:+${country}-}Trojan-${ip_type}"
+    local name="$(_country_prefix "$country")Trojan-${ip_type}"
     printf '%s\n' "trojan://${password}@${ip}:${port}?security=tls&sni=${sni}&type=tcp&allowInsecure=1#${name}"
 }
 
 gen_trojan_ws_link() {
     local ip="$1" port="$2" password="$3" sni="$4" path="${5:-/trojan}" country="${6:-}"
     local ip_type=$(_ip_type_label "$ip")
-    local name="${country:+${country}-}Trojan-${ip_type}"
+    local name="$(_country_prefix "$country")Trojan-${ip_type}"
     printf '%s\n' "trojan://${password}@${ip}:${port}?security=tls&sni=${sni}&type=ws&host=${sni}&path=$(urlencode "$path")&allowInsecure=1#${name}"
 }
 
 gen_vless_ws_link() {
     local ip="$1" port="$2" uuid="$3" sni="$4" path="${5:-/}" country="${6:-}"
     local ip_type=$(_ip_type_label "$ip")
-    local name="${country:+${country}-}Vless-WS-${ip_type}"
+    local name="$(_country_prefix "$country")Vless-WS-${ip_type}"
     printf '%s\n' "vless://${uuid}@${ip}:${port}?encryption=none&security=tls&sni=${sni}&type=ws&host=${sni}&path=$(urlencode "$path")&allowInsecure=1#${name}"
 }
 
@@ -5821,7 +5838,7 @@ gen_vless_ws_link() {
 gen_vless_ws_notls_link() {
     local ip="$1" port="$2" uuid="$3" path="${4:-/}" host="${5:-}" country="${6:-}"
     local ip_type=$(_ip_type_label "$ip")
-    local name="${country:+${country}-}Vless-CF-${ip_type}"
+    local name="$(_country_prefix "$country")Vless-CF-${ip_type}"
     # security=none 表示不使用 TLS
     local link="vless://${uuid}@${ip}:${port}?encryption=none&security=none&type=ws&path=$(urlencode "$path")"
     [[ -n "$host" ]] && link="${link}&host=${host}"
@@ -5831,14 +5848,14 @@ gen_vless_ws_notls_link() {
 gen_vless_vision_link() {
     local ip="$1" port="$2" uuid="$3" sni="$4" country="${5:-}"
     local ip_type=$(_ip_type_label "$ip")
-    local name="${country:+${country}-}Vless-${ip_type}"
+    local name="$(_country_prefix "$country")Vless-${ip_type}"
     printf '%s\n' "vless://${uuid}@${ip}:${port}?encryption=none&security=tls&sni=${sni}&type=tcp&flow=xtls-rprx-vision&allowInsecure=1#${name}"
 }
 
 gen_ss2022_link() {
     local ip="$1" port="$2" method="$3" password="$4" country="${5:-}"
     local ip_type=$(_ip_type_label "$ip")
-    local name="${country:+${country}-}SS-${ip_type}"
+    local name="$(_country_prefix "$country")SS-${ip_type}"
     local userinfo=$(printf '%s:%s' "$method" "$password" | base64 -w 0 2>/dev/null || printf '%s:%s' "$method" "$password" | base64)
     printf '%s\n' "ss://${userinfo}@${ip}:${port}#${name}"
 }
@@ -5846,7 +5863,7 @@ gen_ss2022_link() {
 gen_ss_legacy_link() {
     local ip="$1" port="$2" method="$3" password="$4" country="${5:-}"
     local ip_type=$(_ip_type_label "$ip")
-    local name="${country:+${country}-}SS-${ip_type}"
+    local name="$(_country_prefix "$country")SS-${ip_type}"
     local userinfo=$(printf '%s:%s' "$method" "$password" | base64 -w 0 2>/dev/null || printf '%s:%s' "$method" "$password" | base64)
     printf '%s\n' "ss://${userinfo}@${ip}:${port}#${name}"
 }
@@ -5854,7 +5871,7 @@ gen_ss_legacy_link() {
 gen_snell_link() {
     local ip="$1" port="$2" psk="$3" version="${4:-4}" country="${5:-}"
     local ip_type=$(_ip_type_label "$ip")
-    local name="${country:+${country}-}Snell-${ip_type}"
+    local name="$(_country_prefix "$country")Snell-${ip_type}"
     local clean_ip="${ip#[}"; clean_ip="${clean_ip%]}"
     printf '%s\n' "snell://${psk}@${clean_ip}:${port}?version=${version}#${name}"
 }
@@ -5862,20 +5879,20 @@ gen_snell_link() {
 gen_tuic_link() {
     local ip="$1" port="$2" uuid="$3" password="$4" sni="$5" country="${6:-}"
     local ip_type=$(_ip_type_label "$ip")
-    local name="${country:+${country}-}TUIC-${ip_type}"
+    local name="$(_country_prefix "$country")TUIC-${ip_type}"
     printf '%s\n' "tuic://${uuid}:${password}@${ip}:${port}?congestion_control=bbr&alpn=h3&sni=${sni}&udp_relay_mode=native&allow_insecure=1#${name}"
 }
 
 gen_anytls_link() {
     local ip="$1" port="$2" password="$3" sni="$4" country="${5:-}"
     local ip_type=$(_ip_type_label "$ip")
-    local name="${country:+${country}-}AnyTLS-${ip_type}"
+    local name="$(_country_prefix "$country")AnyTLS-${ip_type}"
     printf '%s\n' "anytls://${password}@${ip}:${port}?sni=${sni}&allowInsecure=1#${name}"
 }
 
 gen_naive_link() {
     local host="$1" port="$2" username="$3" password="$4" country="${5:-}"
-    local name="${country:+${country}-}Naive"
+    local name="$(_country_prefix "$country")Naive"
     # Shadowrocket HTTP/2 格式，使用域名
     printf '%s\n' "http2://${username}:${password}@${host}:${port}#${name}"
 }
@@ -5883,7 +5900,7 @@ gen_naive_link() {
 gen_shadowtls_link() {
     local ip="$1" port="$2" password="$3" method="$4" sni="$5" stls_password="$6" country="${7:-}"
     local ip_type=$(_ip_type_label "$ip")
-    local name="${country:+${country}-}SS-STLS-${ip_type}"
+    local name="$(_country_prefix "$country")SS-STLS-${ip_type}"
     # ShadowTLS链接格式：ss://method:password@server:port#name + ShadowTLS参数
     local ss_link=$(echo -n "${method}:${password}" | base64 -w 0)
     printf '%s\n' "ss://${ss_link}@${ip}:${port}?plugin=shadow-tls;host=${sni};password=${stls_password}#${name}"
@@ -5895,7 +5912,7 @@ gen_snell_v5_link() { gen_snell_link "$1" "$2" "$3" "${4:-5}" "$5"; }
 gen_socks_link() {
     local ip="$1" port="$2" username="$3" password="$4" country="${5:-}"
     local ip_type=$(_ip_type_label "$ip")
-    local name="${country:+${country}-}SOCKS5-${ip_type}"
+    local name="$(_country_prefix "$country")SOCKS5-${ip_type}"
     if [[ -n "$username" && -n "$password" ]]; then
         printf '%s\n' "https://t.me/socks?server=${ip}&port=${port}&user=${username}&pass=${password}"
     else
@@ -21807,7 +21824,7 @@ gen_clash_sub() {
                 actual_port="$master_port"
             fi
             
-            local name="${country_code}-$(_sub_proto_label $protocol)-$(_ip_type_label "$server_ip")"
+            local name="$(_country_prefix "$country_code")$(_sub_proto_label $protocol)-$(_ip_type_label "$server_ip")"
             local proxy=""
             
             case "$protocol" in
@@ -22053,7 +22070,7 @@ gen_surge_sub() {
             local version=$(echo "$cfg" | jq -r '.version // empty')
             
             local stls_password=$(echo "$cfg" | jq -r '.stls_password // empty')
-            local name="${country_code}-$(_sub_proto_label $protocol)-$(_ip_type_label "$server_ip")"
+            local name="$(_country_prefix "$country_code")$(_sub_proto_label $protocol)-$(_ip_type_label "$server_ip")"
             local proxy=""
 
             case "$protocol" in
