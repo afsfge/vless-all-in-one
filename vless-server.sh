@@ -1,6 +1,6 @@
 #!/bin/bash 
 #═══════════════════════════════════════════════════════════════════════════════
-#  多协议代理一键部署脚本 v3.5.7 [服务端]
+#  多协议代理一键部署脚本 v3.5.8 [服务端]
 #  
 #  架构升级:
 #    • Xray 核心: 处理 TCP/TLS 协议 (VLESS/VMess/Trojan/SOCKS/SS2022)
@@ -17,7 +17,7 @@
 #  项目地址: https://github.com/afsfge/vless-all-in-one
 #═══════════════════════════════════════════════════════════════════════════════
 
-readonly VERSION="3.5.7"
+readonly VERSION="3.5.8"
 readonly AUTHOR="afsfge"
 readonly REPO_URL="https://github.com/afsfge/vless-all-in-one"
 readonly SCRIPT_REPO="afsfge/vless-all-in-one"
@@ -21817,6 +21817,8 @@ gen_clash_sub() {
             local username=$(echo "$cfg" | jq -r '.username // empty')
             local method=$(echo "$cfg" | jq -r '.method // empty')
             local psk=$(echo "$cfg" | jq -r '.psk // empty')
+            local version=$(echo "$cfg" | jq -r '.version // empty')
+            local stls_password=$(echo "$cfg" | jq -r '.stls_password // empty')
             
             # 对于回落子协议，使用主协议端口
             local actual_port="$port"
@@ -21967,6 +21969,37 @@ gen_clash_sub() {
     password: $password
     sni: $sni
     skip-cert-verify: true"
+                ;;
+            snell|snell-v5)
+                if [[ -n "$server_ip" ]]; then
+                    local snell_version="${version:-4}"
+                    [[ "$protocol" == "snell-v5" ]] && snell_version="${version:-5}"
+                    proxy="  - name: \"$name\"
+    type: snell
+    server: \"$server_ip\"
+    port: $port
+    psk: $psk
+    version: $snell_version
+    reuse: true
+    tfo: true"
+                fi
+                ;;
+            snell-shadowtls|snell-v5-shadowtls)
+                if [[ -n "$server_ip" ]]; then
+                    local snell_version="${version:-4}"
+                    [[ "$protocol" == "snell-v5-shadowtls" ]] && snell_version="${version:-5}"
+                    proxy="  - name: \"$name\"
+    type: snell
+    server: \"$server_ip\"
+    port: $port
+    psk: $psk
+    version: $snell_version
+    reuse: true
+    tfo: true
+    shadow-tls-password: $stls_password
+    shadow-tls-sni: $sni
+    shadow-tls-version: 3"
+                fi
                 ;;
             esac
             
