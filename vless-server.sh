@@ -21994,11 +21994,9 @@ gen_clash_sub() {
     psk: $psk
     version: $_snell_ver
     udp: true
-    obfs-opts:
-      mode: shadow-tls
-      host: $sni
-      password: $stls_password
-      version: 3"
+    shadow-tls-password: $stls_password
+    shadow-tls-sni: $sni
+    shadow-tls-version: 3"
                 fi
                 ;;
             esac
