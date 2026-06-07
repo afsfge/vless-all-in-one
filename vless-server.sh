@@ -21819,13 +21819,13 @@ gen_clash_sub() {
             local psk=$(echo "$cfg" | jq -r '.psk // empty')
             local version=$(echo "$cfg" | jq -r '.version // empty')
             local stls_password=$(echo "$cfg" | jq -r '.stls_password // empty')
-            
+
             # 对于回落子协议，使用主协议端口
             local actual_port="$port"
             if [[ -n "$master_port" && ("$protocol" == "vless-ws" || "$protocol" == "vmess-ws") ]]; then
                 actual_port="$master_port"
             fi
-            
+
             local name="$(_country_prefix "$country_code")$(_sub_proto_label $protocol)-$(_ip_type_label "$server_ip")"
             local proxy=""
             
@@ -21972,37 +21972,37 @@ gen_clash_sub() {
                 ;;
             snell|snell-v5)
                 if [[ -n "$server_ip" ]]; then
-                    local snell_version="${version:-4}"
-                    [[ "$protocol" == "snell-v5" ]] && snell_version="${version:-5}"
+                    local _snell_ver="${version:-4}"
+                    [[ "$protocol" == "snell-v5" ]] && _snell_ver="${version:-5}"
                     proxy="  - name: \"$name\"
     type: snell
     server: \"$server_ip\"
     port: $port
     psk: $psk
-    version: $snell_version
-    reuse: true
-    tfo: true"
+    version: $_snell_ver
+    udp: true"
                 fi
                 ;;
             snell-shadowtls|snell-v5-shadowtls)
                 if [[ -n "$server_ip" ]]; then
-                    local snell_version="${version:-4}"
-                    [[ "$protocol" == "snell-v5-shadowtls" ]] && snell_version="${version:-5}"
+                    local _snell_ver="${version:-4}"
+                    [[ "$protocol" == "snell-v5-shadowtls" ]] && _snell_ver="${version:-5}"
                     proxy="  - name: \"$name\"
     type: snell
     server: \"$server_ip\"
     port: $port
     psk: $psk
-    version: $snell_version
-    reuse: true
-    tfo: true
-    shadow-tls-password: $stls_password
-    shadow-tls-sni: $sni
-    shadow-tls-version: 3"
+    version: $_snell_ver
+    udp: true
+    obfs-opts:
+      mode: shadow-tls
+      host: $sni
+      password: $stls_password
+      version: 3"
                 fi
                 ;;
             esac
-            
+
             if [[ -n "$proxy" ]]; then
                 proxies+="$proxy"$'\n'
                 proxy_names+="      - \"$name\""$'\n'
