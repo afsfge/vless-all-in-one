@@ -21987,24 +21987,18 @@ gen_clash_sub() {
                 if [[ -n "$server_ip" ]]; then
                     local _snell_ver="${version:-4}"
                     [[ "$protocol" == "snell-v5-shadowtls" ]] && _snell_ver="${version:-5}"
-                    local _stls_tunnel_name="${name}-stls"
-                    # 先把 shadowtls 传输层条目直接写入 proxies（不进 proxy-group）
-                    proxies+="  - name: \"$_stls_tunnel_name\"
-    type: shadowtls
-    server: \"$server_ip\"
-    port: $port
-    password: $stls_password
-    sni: $sni
-    version: 3"$'\n'
-                    # snell 条目通过 dialer-proxy 走 shadow-tls（进 proxy-group）
+                    # Shadowrocket 将 shadow-tls 作为 plugin 处理（类似 obfs）
                     proxy="  - name: \"$name\"
     type: snell
     server: \"$server_ip\"
     port: $port
     psk: $psk
     version: $_snell_ver
-    udp: true
-    dialer-proxy: \"$_stls_tunnel_name\""
+    plugin: shadow-tls
+    plugin-opts:
+      host: $sni
+      password: $stls_password
+      version: 3"
                 fi
                 ;;
             esac
