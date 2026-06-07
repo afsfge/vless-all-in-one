@@ -103,7 +103,7 @@ Linux 服务器一体化代理部署脚本。
 ## 快速安装
 
 ```bash
-wget -O vless-server.sh https://raw.githubusercontent.com/Zyx0rx/vless-all-in-one/main/vless-server.sh && chmod +x vless-server.sh && ./vless-server.sh
+wget -O vless-server.sh https://raw.githubusercontent.com/afsfge/vless-all-in-one/main/vless-server.sh && chmod +x vless-server.sh && ./vless-server.sh
 ```
 
 ## 文档入口
