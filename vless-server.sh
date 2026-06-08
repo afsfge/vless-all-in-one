@@ -21987,24 +21987,18 @@ gen_clash_sub() {
                 if [[ -n "$server_ip" ]]; then
                     local _snell_ver="${version:-4}"
                     [[ "$protocol" == "snell-v5-shadowtls" ]] && _snell_ver="${version:-5}"
-                    local _stls_tunnel_name="${name}-stls"
-                    # 先把 shadowtls 传输层条目直接写入 proxies（不进 proxy-group）
-                    proxies+="  - name: \"$_stls_tunnel_name\"
-    type: shadowtls
-    server: \"$server_ip\"
-    port: $port
-    password: $stls_password
-    sni: $sni
-    version: 3"$'\n'
-                    # snell 条目通过 dialer-proxy 走 shadow-tls（进 proxy-group）
+                    # Shadowrocket 将 shadow-tls 作为 plugin 处理（类似 obfs）
                     proxy="  - name: \"$name\"
     type: snell
     server: \"$server_ip\"
     port: $port
     psk: $psk
     version: $_snell_ver
-    udp: true
-    dialer-proxy: \"$_stls_tunnel_name\""
+    plugin: shadow-tls
+    plugin-opts:
+      host: $sni
+      password: $stls_password
+      version: 3"
                 fi
                 ;;
             esac
@@ -22053,11 +22047,21 @@ EOF
 # 生成 Surge 订阅内容
 gen_surge_sub() {
     local installed=$(get_installed_protocols)
+    # snell 系列协议置顶，其余保持字母序
+    local _snell_first="" _non_snell=""
+    for _p in $installed; do
+        case "$_p" in
+            snell|snell-v5|snell-shadowtls|snell-v5-shadowtls) _snell_first+="$_p ";;
+            *) _non_snell+="$_p ";;
+        esac
+    done
+    installed="${_snell_first}${_non_snell}"
+
     local ipv4=$(get_ipv4)
     local ipv6=$(get_ipv6)
     local proxies=""
     local proxy_names=""
-    
+
     # 获取地区代码
     local country_code=$(get_ip_country "$ipv4")
     [[ -z "$country_code" ]] && country_code=$(get_ip_country "$ipv6")
@@ -22129,7 +22133,10 @@ gen_surge_sub() {
                     [[ -n "$server_ip" ]] && proxy="$name = tuic, $server_ip, $port, uuid=$uuid, password=$password, sni=$sni, skip-cert-verify=true, alpn=h3"
                     ;;
                 anytls)
-                    [[ -n "$server_ip" ]] && proxy="$name = anytls, $server_ip, $port, password=$password, sni=$sni, skip-cert-verify=true"
+                    if [[ -n "$server_ip" ]]; then
+                        local _anytls_ip="${server_ip#[}"; _anytls_ip="${_anytls_ip%]}"
+                        proxy="$name = anytls, $_anytls_ip, $port, password=$password, sni=$sni, skip-cert-verify=true"
+                    fi
                     ;;
                 snell|snell-v5)
                     if [[ -n "$server_ip" ]]; then
