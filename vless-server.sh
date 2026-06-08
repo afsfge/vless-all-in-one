@@ -22115,40 +22115,33 @@ gen_surge_sub() {
             local stls_password=$(echo "$cfg" | jq -r '.stls_password // empty')
             local name="$(_country_prefix "$country_code")$(_sub_proto_label $protocol)-$(_ip_type_label "$server_ip")"
             local proxy=""
+            # Surge 代理行语法不接受 [IPv6] 方括号，统一脱括号后使用
+            local _ip="${server_ip#[}"; _ip="${_ip%]}"
 
             case "$protocol" in
                 trojan)
-                    [[ -n "$server_ip" ]] && proxy="$name = trojan, $server_ip, $port, password=$password, sni=$sni, skip-cert-verify=true"
+                    [[ -n "$_ip" ]] && proxy="$name = trojan, $_ip, $port, password=$password, sni=$sni, skip-cert-verify=true"
                     ;;
                 ss2022)
-                    [[ -n "$server_ip" ]] && proxy="$name = ss, $server_ip, $port, encrypt-method=$method, password=$password"
+                    [[ -n "$_ip" ]] && proxy="$name = ss, $_ip, $port, encrypt-method=$method, password=$password"
                     ;;
                 ss-legacy)
-                    [[ -n "$server_ip" ]] && proxy="$name = ss, $server_ip, $port, encrypt-method=$method, password=$password"
+                    [[ -n "$_ip" ]] && proxy="$name = ss, $_ip, $port, encrypt-method=$method, password=$password"
                     ;;
                 hy2)
-                    [[ -n "$server_ip" ]] && proxy="$name = hysteria2, $server_ip, $port, password=$password, sni=$sni, skip-cert-verify=true"
+                    [[ -n "$_ip" ]] && proxy="$name = hysteria2, $_ip, $port, password=$password, sni=$sni, skip-cert-verify=true"
                     ;;
                 tuic)
-                    [[ -n "$server_ip" ]] && proxy="$name = tuic, $server_ip, $port, uuid=$uuid, password=$password, sni=$sni, skip-cert-verify=true, alpn=h3"
+                    [[ -n "$_ip" ]] && proxy="$name = tuic, $_ip, $port, uuid=$uuid, password=$password, sni=$sni, skip-cert-verify=true, alpn=h3"
                     ;;
                 anytls)
-                    if [[ -n "$server_ip" ]]; then
-                        local _anytls_ip="${server_ip#[}"; _anytls_ip="${_anytls_ip%]}"
-                        proxy="$name = anytls, $_anytls_ip, $port, password=$password, sni=$sni, skip-cert-verify=true"
-                    fi
+                    [[ -n "$_ip" ]] && proxy="$name = anytls, $_ip, $port, password=$password, sni=$sni, skip-cert-verify=true"
                     ;;
                 snell|snell-v5)
-                    if [[ -n "$server_ip" ]]; then
-                        local _snell_ip="${server_ip#[}"; _snell_ip="${_snell_ip%]}"
-                        proxy="$name = snell, $_snell_ip, $port, psk=$psk, version=${version:-4}"
-                    fi
+                    [[ -n "$_ip" ]] && proxy="$name = snell, $_ip, $port, psk=$psk, version=${version:-4}"
                     ;;
                 snell-shadowtls|snell-v5-shadowtls)
-                    if [[ -n "$server_ip" ]]; then
-                        local _snell_ip="${server_ip#[}"; _snell_ip="${_snell_ip%]}"
-                        proxy="$name = snell, $_snell_ip, $port, psk=$psk, version=${version:-4}, reuse=true, tfo=true, shadow-tls-password=$stls_password, shadow-tls-sni=$sni, shadow-tls-version=3"
-                    fi
+                    [[ -n "$_ip" ]] && proxy="$name = snell, $_ip, $port, psk=$psk, version=${version:-4}, reuse=true, tfo=true, shadow-tls-password=$stls_password, shadow-tls-sni=$sni, shadow-tls-version=3"
                     ;;
             esac
             
