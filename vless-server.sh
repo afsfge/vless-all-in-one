@@ -22123,7 +22123,10 @@ gen_surge_sub() {
                     [[ -n "$server_ip" ]] && proxy="$name = tuic, $server_ip, $port, uuid=$uuid, password=$password, sni=$sni, skip-cert-verify=true, alpn=h3"
                     ;;
                 anytls)
-                    [[ -n "$server_ip" ]] && proxy="$name = anytls, $server_ip, $port, password=$password, sni=$sni, skip-cert-verify=true"
+                    if [[ -n "$server_ip" ]]; then
+                        local _anytls_ip="${server_ip#[}"; _anytls_ip="${_anytls_ip%]}"
+                        proxy="$name = anytls, $_anytls_ip, $port, password=$password, sni=$sni, skip-cert-verify=true"
+                    fi
                     ;;
                 snell|snell-v5)
                     if [[ -n "$server_ip" ]]; then
