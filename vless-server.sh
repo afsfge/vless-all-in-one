@@ -1,6 +1,6 @@
 #!/bin/bash 
 #═══════════════════════════════════════════════════════════════════════════════
-#  多协议代理一键部署脚本 v3.5.11 [服务端]
+#  多协议代理一键部署脚本 v3.5.12 [服务端]
 #  
 #  架构升级:
 #    • Xray 核心: 处理 TCP/TLS 协议 (VLESS/VMess/Trojan/SOCKS/SS2022)
@@ -17,7 +17,7 @@
 #  项目地址: https://github.com/afsfge/vless-all-in-one
 #═══════════════════════════════════════════════════════════════════════════════
 
-readonly VERSION="3.5.11"
+readonly VERSION="3.5.12"
 readonly AUTHOR="afsfge"
 readonly REPO_URL="https://github.com/afsfge/vless-all-in-one"
 readonly SCRIPT_REPO="afsfge/vless-all-in-one"
@@ -14047,11 +14047,6 @@ show_status() {
         local display_info=""
         [[ $block_count -gt 0 ]] && display_info="(屏蔽${block_count}条)"
         echo -e "  分流: ${G}${rules_count}条规则${display_info}${NC}"
-    fi
-    if access_restriction_enabled; then
-        echo -e "  访问限制: ${G}已启用${NC}"
-    else
-        echo -e "  访问限制: ${D}未启用${NC}"
     fi
 }
 
