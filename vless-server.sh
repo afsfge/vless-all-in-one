@@ -1,6 +1,6 @@
 #!/bin/bash 
 #═══════════════════════════════════════════════════════════════════════════════
-#  多协议代理一键部署脚本 v3.5.12 [服务端]
+#  多协议代理一键部署脚本 v3.7.1 [服务端]
 #  
 #  架构升级:
 #    • Xray 核心: 处理 TCP/TLS 协议 (VLESS/VMess/Trojan/SOCKS/SS2022)
@@ -17,7 +17,7 @@
 #  项目地址: https://github.com/afsfge/vless-all-in-one
 #═══════════════════════════════════════════════════════════════════════════════
 
-readonly VERSION="3.7.0"
+readonly VERSION="3.7.1"
 readonly AUTHOR="afsfge"
 readonly REPO_URL="https://github.com/afsfge/vless-all-in-one"
 readonly SCRIPT_REPO="afsfge/vless-all-in-one"
@@ -5038,8 +5038,9 @@ gen_snell_link() {
     local ip="$1" port="$2" psk="$3" version="${4:-4}" country="${5:-}"
     local ip_type=$(_ip_type_label "$ip")
     local name="$(_country_prefix "$country")Snell-v${version}-${ip_type}"
-    local clean_ip="${ip#[}"; clean_ip="${clean_ip%]}"
-    printf '%s\n' "snell://${psk}@${clean_ip}:${port}?version=${version}#${name}"
+    local host="$ip"
+    [[ "$host" != \[*\] && "$host" == *:* ]] && host="[$host]"
+    printf '%s\n' "snell://${psk}@${host}:${port}?version=${version}#${name}"
 }
 
 gen_tuic_link() {
@@ -9420,33 +9421,8 @@ install_snell_v6() {
                 || true
             # 检查 libcrypto.so.1.1 是否存在（Debian 12 / Ubuntu 22.04+ 已升级到 OpenSSL 3）
             if ! ldconfig -p 2>/dev/null | grep -q "libcrypto.so.1.1"; then
-                _info "系统缺少 libcrypto.so.1.1 (OpenSSL 1.1)，正在补装..."
-                # 通过临时 apt 源安装，比直接下载 .deb 更可靠
-                # 优先阿里云镜像（国内 VPS 访问更稳定），失败再试官方源
-                local _bullseye_src _src_file="/etc/apt/sources.list.d/bullseye-snell-tmp.list"
-                if [[ "$DISTRO" == "ubuntu" ]]; then
-                    _bullseye_src="https://mirrors.aliyun.com/ubuntu focal main"
-                else
-                    _bullseye_src="https://mirrors.aliyun.com/debian bullseye main"
-                fi
-                echo "deb $_bullseye_src" > "$_src_file"
-                if apt-get update -qq 2>/dev/null && apt-get install -y -qq libssl1.1 2>/dev/null; then
-                    _ok "libssl1.1 已安装"
-                else
-                    # 回落到官方源
-                    if [[ "$DISTRO" == "ubuntu" ]]; then
-                        echo "deb http://archive.ubuntu.com/ubuntu focal main" > "$_src_file"
-                    else
-                        echo "deb http://deb.debian.org/debian bullseye main" > "$_src_file"
-                    fi
-                    apt-get update -qq 2>/dev/null
-                    apt-get install -y -qq libssl1.1 2>/dev/null \
-                        && _ok "libssl1.1 已安装" \
-                        || _warn "libssl1.1 安装失败，snell v6 可能无法运行（beta 版本限制）"
-                fi
-                rm -f "$_src_file"
-                apt-get update -qq 2>/dev/null || true
-                ldconfig 2>/dev/null || true
+                _warn "系统缺少 libcrypto.so.1.1 (OpenSSL 1.1)，Snell v6 beta 可能无法运行"
+                _warn "如服务启动失败，请手动安装 libssl1.1，或等待官方发布兼容 OpenSSL 3 的版本"
             fi
             ;;
         centos)
@@ -10350,25 +10326,37 @@ get_all_services() {
     
     [[ ! -f "$DB_FILE" ]] && { echo ""; return; }
     
-    # 检查 Xray 协议
-    local xray_protos=$(jq -r '.xray | keys[]' "$DB_FILE" 2>/dev/null)
-    [[ -n "$xray_protos" ]] && services+="vless-reality:xray "
-    
-    # 检查 Sing-box 协议 (hy2/tuic 由 vless-singbox 统一管理)
-    local singbox_protos=$(jq -r '.singbox | keys[]' "$DB_FILE" 2>/dev/null)
+    local has_xray=false
     local has_singbox=false
-    for proto in $singbox_protos; do
+
+    add_protocol_service() {
+        local proto="$1"
         case "$proto" in
-            hy2|tuic) has_singbox=true ;;
+            vless|vless-xhttp|vless-xhttp-cdn|vless-ws|vless-ws-notls|vmess-ws|vless-vision|trojan|trojan-ws|socks|ss2022|ss-legacy)
+                has_xray=true ;;
+            hy2|tuic|anytls)
+                has_singbox=true ;;
             snell) services+="vless-snell:snell-server " ;;
             snell-v5) services+="vless-snell-v5:snell-server-v5 " ;;
             snell-v6) services+="vless-snell-v6:snell-server-v6 " ;;
-            anytls) services+="vless-anytls:anytls-server " ;;
             snell-shadowtls) services+="vless-snell-shadowtls:shadow-tls " ;;
             snell-v5-shadowtls) services+="vless-snell-v5-shadowtls:shadow-tls " ;;
             snell-v6-shadowtls) services+="vless-snell-v6-shadowtls:shadow-tls " ;;
             ss2022-shadowtls) services+="vless-ss2022-shadowtls:shadow-tls " ;;
         esac
+    }
+
+    # 检查 Xray 配置树：Snell/ShadowTLS 也保存在这里，但由独立服务运行
+    local xray_protos=$(jq -r '.xray | keys[]' "$DB_FILE" 2>/dev/null)
+    for proto in $xray_protos; do
+        add_protocol_service "$proto"
+    done
+    [[ "$has_xray" == "true" ]] && services+="vless-reality:xray "
+
+    # 检查 Sing-box 协议 (hy2/tuic/anytls 由 vless-singbox 统一管理)
+    local singbox_protos=$(jq -r '.singbox | keys[]' "$DB_FILE" 2>/dev/null)
+    for proto in $singbox_protos; do
+        add_protocol_service "$proto"
     done
     [[ "$has_singbox" == "true" ]] && services+="vless-singbox:sing-box "
     
