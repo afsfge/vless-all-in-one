@@ -17,7 +17,7 @@
 #  项目地址: https://github.com/afsfge/vless-all-in-one
 #═══════════════════════════════════════════════════════════════════════════════
 
-readonly VERSION="3.6.8"
+readonly VERSION="3.6.9"
 readonly AUTHOR="afsfge"
 readonly REPO_URL="https://github.com/afsfge/vless-all-in-one"
 readonly SCRIPT_REPO="afsfge/vless-all-in-one"
@@ -286,6 +286,16 @@ db_get_all_protocols() {
     [[ ! -f "$DB_FILE" ]] && return 1
     { jq -r '.xray | keys[]' "$DB_FILE" 2>/dev/null; jq -r '.singbox | keys[]' "$DB_FILE" 2>/dev/null; } | sort -u
 }
+
+# ── 高级功能占位符（未实现时返回空值，避免 command not found）──────────────
+# 分流规则：返回空 JSON 数组，调用方按 "无规则" 处理
+db_get_routing_rules()          { echo "[]"; }
+# Xray 多IP出站生成：返回空数组，调用方跳过多IP路由配置
+gen_xray_ip_routing_outbounds() { echo "[]"; }
+# Sing-box 默认用户初始化：无需操作时为空函数
+_ensure_singbox_default_users() { :; }
+# Sing-box 统计用户映射：返回空，调用方跳过统计配置
+_get_singbox_stat_user_mappings() { return 0; }
 
 #═══════════════════════════════════════════════════════════════════════════════
 #  多IP入出站配置 (IP Routing)
