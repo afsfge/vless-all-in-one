@@ -4877,8 +4877,12 @@ _sub_proto_label() {
         hy2)                          echo "Hy2" ;;
         ss2022|ss-legacy)             echo "SS" ;;
         ss2022-shadowtls)             echo "SS-STLS" ;;
-        snell|snell-v5|snell-v6)      echo "Snell" ;;
-        snell-shadowtls|snell-v5-shadowtls|snell-v6-shadowtls) echo "Snell-STLS" ;;
+        snell)            echo "Snell-v4" ;;
+        snell-v5)         echo "Snell-v5" ;;
+        snell-v6)         echo "Snell-v6" ;;
+        snell-shadowtls)       echo "Snell-v4-STLS" ;;
+        snell-v5-shadowtls)    echo "Snell-v5-STLS" ;;
+        snell-v6-shadowtls)    echo "Snell-v6-STLS" ;;
         trojan|trojan-ws)             echo "Trojan" ;;
         anytls)                       echo "AnyTLS" ;;
         socks)                        echo "SOCKS5" ;;
@@ -5023,7 +5027,7 @@ gen_ss_legacy_link() {
 gen_snell_link() {
     local ip="$1" port="$2" psk="$3" version="${4:-4}" country="${5:-}"
     local ip_type=$(_ip_type_label "$ip")
-    local name="$(_country_prefix "$country")Snell-${ip_type}"
+    local name="$(_country_prefix "$country")Snell-v${version}-${ip_type}"
     local clean_ip="${ip#[}"; clean_ip="${clean_ip%]}"
     printf '%s\n' "snell://${psk}@${clean_ip}:${port}?version=${version}#${name}"
 }
@@ -11800,7 +11804,7 @@ show_single_protocol_info() {
             echo -e "  版本: ${G}v$version${NC}"
             echo ""
             echo -e "  ${Y}Surge 配置 (Snell 为 Surge 专属协议):${NC}"
-            echo -e "  ${C}${country_code}-Snell = snell, ${config_ip}, ${display_port}, psk=${psk}, version=${version}, reuse=true, tfo=true${NC}"
+            echo -e "  ${C}${country_code}-Snell-v${version} = snell, ${config_ip}, ${display_port}, psk=${psk}, version=${version}, reuse=true, tfo=true${NC}"
             ;;
         tuic)
             echo -e "  UUID: ${G}$uuid${NC}"
