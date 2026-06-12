@@ -1,6 +1,6 @@
 #!/bin/bash 
 #═══════════════════════════════════════════════════════════════════════════════
-#  多协议代理一键部署脚本 v3.7.1 [服务端]
+#  多协议代理一键部署脚本 v3.7.2 [服务端]
 #  
 #  架构升级:
 #    • Xray 核心: 处理 TCP/TLS 协议 (VLESS/VMess/Trojan/SOCKS/SS2022)
@@ -17,7 +17,7 @@
 #  项目地址: https://github.com/afsfge/vless-all-in-one
 #═══════════════════════════════════════════════════════════════════════════════
 
-readonly VERSION="3.7.1"
+readonly VERSION="3.7.2"
 readonly AUTHOR="afsfge"
 readonly REPO_URL="https://github.com/afsfge/vless-all-in-one"
 readonly SCRIPT_REPO="afsfge/vless-all-in-one"
@@ -10225,18 +10225,21 @@ EOF
 }
 
 # Snell v6 服务端配置
-# v6 采用 PSK 派生协议多样性，配置格式与 v5 相同，无需额外 profile 参数
+# v6 采用 PSK 派生协议多样性，并支持显式配置多个监听地址
 gen_snell_v6_server_config() {
     local psk="$1" port="$2" version="${3:-6}"
     mkdir -p "$CFG"
 
-    local listen_addr=$(_listen_addr)
+    local listen_addr="0.0.0.0:$port"
     local ipv6_enabled="false"
-    [[ "$listen_addr" == "::" ]] && ipv6_enabled="true"
+    if _has_ipv6; then
+        listen_addr="$listen_addr,[::]:$port"
+        ipv6_enabled="true"
+    fi
 
     cat > "$CFG/snell-v6.conf" << EOF
 [snell-server]
-listen = $(_fmt_hostport "$listen_addr" "$port")
+listen = $listen_addr
 psk = $psk
 version = $version
 ipv6 = $ipv6_enabled
