@@ -17,7 +17,7 @@
 #  项目地址: https://github.com/afsfge/vless-all-in-one
 #═══════════════════════════════════════════════════════════════════════════════
 
-readonly VERSION="3.6.5"
+readonly VERSION="3.6.6"
 readonly AUTHOR="afsfge"
 readonly REPO_URL="https://github.com/afsfge/vless-all-in-one"
 readonly SCRIPT_REPO="afsfge/vless-all-in-one"
@@ -9391,7 +9391,11 @@ install_snell_v6() {
             ;;
         debian|ubuntu)
             _info "安装 Snell v6 运行时依赖..."
-            apt-get install -y -qq libcares2 2>/dev/null || true
+            # Debian 12 将 libcares2 重命名为 libcares2t64（64-bit time_t 迁移）
+            apt-get install -y -qq libcares2t64 2>/dev/null \
+                || apt-get install -y -qq libcares2 2>/dev/null \
+                || apt-get install -y -qq libc-ares2 2>/dev/null \
+                || true
             # 检查 libcrypto.so.1.1 是否存在（Debian 12 / Ubuntu 22.04+ 已升级到 OpenSSL 3）
             if ! ldconfig -p 2>/dev/null | grep -q "libcrypto.so.1.1"; then
                 _info "系统缺少 libcrypto.so.1.1 (OpenSSL 1.1)，正在补装..."
