@@ -7155,16 +7155,18 @@ _get_snell_v6_version() {
 }
 
 # 从 KB 获取 Snell v6.x.x 版本列表（过滤主版本号 >= 6）
-# v6 版本号格式: 6.0.0b1 (beta 标识直接内嵌，无短横线)
+# KB 标题格式: "### v6.0.0 Beta 1"（Beta 与版本号空格分隔）
+# 下载文件格式: snell-server-v6.0.0b1-linux-amd64.zip（b1 内嵌）
+# 因此需要两步转换: "6.0.0 Beta 1" → "6.0.0b1"
 _get_snell_v6_versions_from_kb() {
     local limit="${1:-10}"
     local result versions
     result=$(curl -sL --connect-timeout 5 --max-time 10 "$SNELL_RELEASE_NOTES_URL" 2>/dev/null)
     [[ -z "$result" ]] && return 1
-    # 正则需兼容 6.0.0b1 (beta后缀无短横线) 和未来的 6.0.0 (正式版)
     versions=$(printf '%s\n' "$result" | \
-        sed -nE 's/^### v([0-9]+\.[0-9]+\.[0-9]+[a-zA-Z0-9]*).*$/\1/p' \
-        | awk -F. '$1+0 >= 6' | head -n "$limit")
+        sed -E 's/^(### v[0-9]+\.[0-9]+\.[0-9]+) Beta ([0-9]+)/\1b\2/' | \
+        sed -nE 's/^### v([0-9]+\.[0-9]+\.[0-9]+[a-zA-Z0-9]*).*/\1/p' | \
+        awk -F. '$1+0 >= 6' | head -n "$limit")
     [[ -z "$versions" ]] && return 1
     echo "$versions"
 }
@@ -9401,16 +9403,37 @@ install_snell_v6() {
         _err "无效的版本号格式: $version"
         return 1
     fi
-    local tmp=$(mktemp -d)
-    if curl -sLo "$tmp/snell.zip" --connect-timeout 60 "https://dl.nssurge.com/snell/snell-server-v${version}-linux-${sarch}.zip"; then
-        unzip -oq "$tmp/snell.zip" -d "$tmp/" && install -m 755 "$tmp/snell-server" /usr/local/bin/snell-server-v6
-        # Alpine: 解压 UPX 压缩 (Snell 官方二进制使用 UPX，musl 不兼容 UPX stub)
-        if [[ "$DISTRO" == "alpine" ]] && command -v upx &>/dev/null; then
-            upx -d /usr/local/bin/snell-server-v6 &>/dev/null || true
+
+    _do_install_v6() {
+        local ver="$1"
+        local tmp=$(mktemp -d)
+        local url="https://dl.nssurge.com/snell/snell-server-v${ver}-linux-${sarch}.zip"
+        # --fail: HTTP 4xx/5xx 时 curl 返回非零，避免把错误页当 zip 静默处理
+        if curl -sLf --connect-timeout 60 -o "$tmp/snell.zip" "$url" \
+            && unzip -oq "$tmp/snell.zip" -d "$tmp/" \
+            && install -m 755 "$tmp/snell-server" /usr/local/bin/snell-server-v6; then
+            if [[ "$DISTRO" == "alpine" ]] && command -v upx &>/dev/null; then
+                upx -d /usr/local/bin/snell-server-v6 &>/dev/null || true
+            fi
+            rm -rf "$tmp"
+            # 更新版本缓存为实际安装的版本
+            _save_version_cache "surge-networks/snell-v6" "$ver"
+            _ok "Snell v$ver 已安装"; return 0
         fi
-        rm -rf "$tmp"; _ok "Snell v$version 已安装"; return 0
+        rm -rf "$tmp"; return 1
+    }
+
+    if _do_install_v6 "$version"; then
+        return 0
     fi
-    rm -rf "$tmp"; _err "下载失败"; return 1
+    # 若从 KB/缓存获取的版本下载失败（如版本号缺少 beta 后缀），自动回落默认版本重试
+    if [[ "$version" != "$SNELL_V6_DEFAULT_VERSION" ]]; then
+        _warn "版本 v${version} 下载失败，回落到默认版本 v${SNELL_V6_DEFAULT_VERSION} 重试..."
+        if _do_install_v6 "$SNELL_V6_DEFAULT_VERSION"; then
+            return 0
+        fi
+    fi
+    _err "Snell v6 下载失败，请检查网络或稍后重试"; return 1
 }
 
 # 安装 AnyTLS
