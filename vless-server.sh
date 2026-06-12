@@ -17,7 +17,7 @@
 #  项目地址: https://github.com/afsfge/vless-all-in-one
 #═══════════════════════════════════════════════════════════════════════════════
 
-readonly VERSION="3.6.6"
+readonly VERSION="3.6.7"
 readonly AUTHOR="afsfge"
 readonly REPO_URL="https://github.com/afsfge/vless-all-in-one"
 readonly SCRIPT_REPO="afsfge/vless-all-in-one"
@@ -9399,21 +9399,31 @@ install_snell_v6() {
             # 检查 libcrypto.so.1.1 是否存在（Debian 12 / Ubuntu 22.04+ 已升级到 OpenSSL 3）
             if ! ldconfig -p 2>/dev/null | grep -q "libcrypto.so.1.1"; then
                 _info "系统缺少 libcrypto.so.1.1 (OpenSSL 1.1)，正在补装..."
-                local _arch; _arch=$(dpkg --print-architecture 2>/dev/null || echo "amd64")
-                local _ssl_deb _tmp_deb
-                _tmp_deb=$(mktemp --suffix=.deb)
+                # 通过临时 apt 源安装，比直接下载 .deb 更可靠
+                # 优先阿里云镜像（国内 VPS 访问更稳定），失败再试官方源
+                local _bullseye_src _src_file="/etc/apt/sources.list.d/bullseye-snell-tmp.list"
                 if [[ "$DISTRO" == "ubuntu" ]]; then
-                    _ssl_deb="http://archive.ubuntu.com/ubuntu/pool/main/o/openssl/libssl1.1_1.1.1f-1ubuntu2_${_arch}.deb"
+                    _bullseye_src="https://mirrors.aliyun.com/ubuntu focal main"
                 else
-                    _ssl_deb="http://security.debian.org/debian-security/pool/updates/main/o/openssl/libssl1.1_1.1.1w-0+deb11u1_${_arch}.deb"
+                    _bullseye_src="https://mirrors.aliyun.com/debian bullseye main"
                 fi
-                if curl -sLf --connect-timeout 30 -o "$_tmp_deb" "$_ssl_deb" \
-                    && dpkg -i "$_tmp_deb" &>/dev/null; then
+                echo "deb $_bullseye_src" > "$_src_file"
+                if apt-get update -qq 2>/dev/null && apt-get install -y -qq libssl1.1 2>/dev/null; then
                     _ok "libssl1.1 已安装"
                 else
-                    _warn "libssl1.1 安装失败，snell v6 可能无法运行（beta 版本限制）"
+                    # 回落到官方源
+                    if [[ "$DISTRO" == "ubuntu" ]]; then
+                        echo "deb http://archive.ubuntu.com/ubuntu focal main" > "$_src_file"
+                    else
+                        echo "deb http://deb.debian.org/debian bullseye main" > "$_src_file"
+                    fi
+                    apt-get update -qq 2>/dev/null
+                    apt-get install -y -qq libssl1.1 2>/dev/null \
+                        && _ok "libssl1.1 已安装" \
+                        || _warn "libssl1.1 安装失败，snell v6 可能无法运行（beta 版本限制）"
                 fi
-                rm -f "$_tmp_deb"
+                rm -f "$_src_file"
+                apt-get update -qq 2>/dev/null || true
                 ldconfig 2>/dev/null || true
             fi
             ;;
