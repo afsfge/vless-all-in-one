@@ -17,7 +17,7 @@
 #  项目地址: https://github.com/afsfge/vless-all-in-one
 #═══════════════════════════════════════════════════════════════════════════════
 
-readonly VERSION="3.6.7"
+readonly VERSION="3.6.8"
 readonly AUTHOR="afsfge"
 readonly REPO_URL="https://github.com/afsfge/vless-all-in-one"
 readonly SCRIPT_REPO="afsfge/vless-all-in-one"
@@ -6414,7 +6414,10 @@ _get_snell_versions_from_kb() {
     local result versions
     result=$(curl -sL --connect-timeout 5 --max-time 10 "$SNELL_RELEASE_NOTES_URL" 2>/dev/null)
     [[ -z "$result" ]] && return 1
-    versions=$(printf '%s\n' "$result" | sed -nE 's/^### v([0-9]+(\.[0-9]+)+(-[0-9A-Za-z.]+)?).*/\1/p' | head -n "$limit")
+    # 只取主版本号 == 5 的版本，避免 v6 进入 KB 后污染 v5 版本列表
+    versions=$(printf '%s\n' "$result" | \
+        sed -nE 's/^### v([0-9]+(\.[0-9]+)+(-[0-9A-Za-z.]+)?).*/\1/p' | \
+        awk -F. '$1+0 == 5' | head -n "$limit")
     [[ -z "$versions" ]] && return 1
     echo "$versions"
 }
@@ -6433,7 +6436,9 @@ _get_snell_latest_version() {
     if [[ "$force" != "true" && "$use_cache" == "true" ]]; then
         local cached_version
         if cached_version=$(_get_cached_version "surge-networks/snell"); then
-            if _is_plain_version "$cached_version"; then
+            # 双重保护：必须是 plain version 且主版本号为 5
+            local _major; _major=$(printf '%s' "$cached_version" | cut -d. -f1)
+            if _is_plain_version "$cached_version" && [[ "$_major" == "5" ]]; then
                 echo "$cached_version"
                 return 0
             fi
@@ -6442,6 +6447,9 @@ _get_snell_latest_version() {
 
     local version
     version=$(_get_snell_versions_from_kb 1 | head -n 1)
+    # 最终兜底：若仍非 5.x，强制回落默认
+    local _v_major; _v_major=$(printf '%s' "$version" | cut -d. -f1)
+    [[ "$_v_major" != "5" ]] && version="$SNELL_DEFAULT_VERSION"
     [[ -z "$version" ]] && version="$SNELL_DEFAULT_VERSION"
     _save_version_cache "surge-networks/snell" "$version"
     echo "$version"
@@ -7760,6 +7768,8 @@ _show_core_versions() {
         snell_latest=$(_get_cached_version "surge-networks/snell" 2>/dev/null)
         [[ -z "$snell_latest" ]] && snell_latest="$SNELL_DEFAULT_VERSION"
         ! _is_plain_version "$snell_latest" && snell_latest="$SNELL_DEFAULT_VERSION"
+        # 防止缓存污染：v6 进 KB 后可能缓存到 6.x 版本
+        [[ "$(printf '%s' "$snell_latest" | cut -d. -f1)" != "5" ]] && snell_latest="$SNELL_DEFAULT_VERSION"
 
         local snell_prerelease_cache="$VERSION_CACHE_DIR/surge-networks_snell_prerelease"
         if [[ -f "$snell_prerelease_cache" ]]; then
@@ -8163,6 +8173,8 @@ _update_core_with_channel_select() {
         [[ "$stable_ver" == "获取中..." ]] && stable_ver="$SNELL_DEFAULT_VERSION"
         [[ "$prerelease_ver" == "获取中..." ]] && prerelease_ver="无"
         ! _is_plain_version "$stable_ver" && stable_ver="$SNELL_DEFAULT_VERSION"
+        # 防止 v6 污染：确保显示的是 v5.x
+        [[ "$(printf '%s' "$stable_ver" | cut -d. -f1)" != "5" ]] && stable_ver="$SNELL_DEFAULT_VERSION"
     elif [[ "$repo" == "surge-networks/snell-v6" ]]; then
         # v6 版本号含 beta 后缀 (如 6.0.0b1)，不能用 _is_plain_version 校验
         [[ "$stable_ver" == "获取中..." || ! "$stable_ver" =~ ^[0-9] ]] && stable_ver="$SNELL_V6_DEFAULT_VERSION"
