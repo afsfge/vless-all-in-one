@@ -1,6 +1,6 @@
 #!/bin/bash 
 #═══════════════════════════════════════════════════════════════════════════════
-#  多协议代理一键部署脚本 v3.7.2 [服务端]
+#  多协议代理一键部署脚本 v3.7.3 [服务端]
 #  
 #  架构升级:
 #    • Xray 核心: 处理 TCP/TLS 协议 (VLESS/VMess/Trojan/SOCKS/SS2022)
@@ -17,7 +17,7 @@
 #  项目地址: https://github.com/afsfge/vless-all-in-one
 #═══════════════════════════════════════════════════════════════════════════════
 
-readonly VERSION="3.7.2"
+readonly VERSION="3.7.3"
 readonly AUTHOR="afsfge"
 readonly REPO_URL="https://github.com/afsfge/vless-all-in-one"
 readonly SCRIPT_REPO="afsfge/vless-all-in-one"
@@ -14686,17 +14686,17 @@ gen_v2ray_sub() {
 # 生成 Clash 订阅内容
 gen_clash_sub() {
     local installed=$(get_installed_protocols)
-    # snell 系列置顶，内部按版本降序：v6 > v5 > v4，再接其余协议
-    local _snell_v6="" _snell_v5="" _snell_v4="" _non_snell=""
+    # snell 系列置顶。Clash 暂不输出 Snell v6，避免客户端不兼容。
+    local _snell_v5="" _snell_v4="" _non_snell=""
     for _p in $installed; do
         case "$_p" in
-            snell-v6|snell-v6-shadowtls) _snell_v6+="$_p ";;
+            snell-v6|snell-v6-shadowtls) continue ;;
             snell-v5|snell-v5-shadowtls) _snell_v5+="$_p ";;
             snell|snell-shadowtls)       _snell_v4+="$_p ";;
             *) _non_snell+="$_p ";;
         esac
     done
-    installed="${_snell_v6}${_snell_v5}${_snell_v4}${_non_snell}"
+    installed="${_snell_v5}${_snell_v4}${_non_snell}"
 
     local ipv4=$(get_ipv4)
     local ipv6=$(get_ipv6)
