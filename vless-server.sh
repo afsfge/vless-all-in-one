@@ -17,7 +17,7 @@
 #  项目地址: https://github.com/afsfge/vless-all-in-one
 #═══════════════════════════════════════════════════════════════════════════════
 
-readonly VERSION="3.6.3"
+readonly VERSION="3.6.4"
 readonly AUTHOR="afsfge"
 readonly REPO_URL="https://github.com/afsfge/vless-all-in-one"
 readonly SCRIPT_REPO="afsfge/vless-all-in-one"
@@ -9382,10 +9382,18 @@ install_snell_v6() {
         aarch64) sarch="aarch64" ;;
         *) _err "Snell v6 不支持当前架构 $(uname -m)，仅支持 amd64/aarch64"; return 1 ;;
     esac
-    # Alpine 需要安装 upx 来解压 UPX 压缩的二进制 (musl 不兼容 UPX stub)
-    if [[ "$DISTRO" == "alpine" ]]; then
-        apk add --no-cache upx &>/dev/null
-    fi
+    # Snell v6 依赖 libcares (c-ares DNS 库)，v4/v5 是完全静态链接的，v6 不是
+    case "$DISTRO" in
+        alpine)
+            apk add --no-cache c-ares upx &>/dev/null
+            ;;
+        debian|ubuntu)
+            apt-get install -y -qq libcares2 2>/dev/null || true
+            ;;
+        centos)
+            yum install -y -q c-ares 2>/dev/null || true
+            ;;
+    esac
     local version=""
     if [[ -n "$version_override" ]]; then
         _info "$action Snell v6 (版本 v$version_override)..."
