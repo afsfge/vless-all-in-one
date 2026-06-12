@@ -17,7 +17,7 @@
 #  项目地址: https://github.com/afsfge/vless-all-in-one
 #═══════════════════════════════════════════════════════════════════════════════
 
-readonly VERSION="3.6.4"
+readonly VERSION="3.6.5"
 readonly AUTHOR="afsfge"
 readonly REPO_URL="https://github.com/afsfge/vless-all-in-one"
 readonly SCRIPT_REPO="afsfge/vless-all-in-one"
@@ -9382,16 +9382,39 @@ install_snell_v6() {
         aarch64) sarch="aarch64" ;;
         *) _err "Snell v6 不支持当前架构 $(uname -m)，仅支持 amd64/aarch64"; return 1 ;;
     esac
-    # Snell v6 依赖 libcares (c-ares DNS 库)，v4/v5 是完全静态链接的，v6 不是
+    # Snell v6 beta 依赖两个动态库（v4/v5 完全静态链接，v6 不是）：
+    #   libcares.so.2   - c-ares DNS 库
+    #   libcrypto.so.1.1 - OpenSSL 1.1（Debian 12 / Ubuntu 22.04+ 已移除）
     case "$DISTRO" in
         alpine)
             apk add --no-cache c-ares upx &>/dev/null
             ;;
         debian|ubuntu)
+            _info "安装 Snell v6 运行时依赖..."
             apt-get install -y -qq libcares2 2>/dev/null || true
+            # 检查 libcrypto.so.1.1 是否存在（Debian 12 / Ubuntu 22.04+ 已升级到 OpenSSL 3）
+            if ! ldconfig -p 2>/dev/null | grep -q "libcrypto.so.1.1"; then
+                _info "系统缺少 libcrypto.so.1.1 (OpenSSL 1.1)，正在补装..."
+                local _arch; _arch=$(dpkg --print-architecture 2>/dev/null || echo "amd64")
+                local _ssl_deb _tmp_deb
+                _tmp_deb=$(mktemp --suffix=.deb)
+                if [[ "$DISTRO" == "ubuntu" ]]; then
+                    _ssl_deb="http://archive.ubuntu.com/ubuntu/pool/main/o/openssl/libssl1.1_1.1.1f-1ubuntu2_${_arch}.deb"
+                else
+                    _ssl_deb="http://security.debian.org/debian-security/pool/updates/main/o/openssl/libssl1.1_1.1.1w-0+deb11u1_${_arch}.deb"
+                fi
+                if curl -sLf --connect-timeout 30 -o "$_tmp_deb" "$_ssl_deb" \
+                    && dpkg -i "$_tmp_deb" &>/dev/null; then
+                    _ok "libssl1.1 已安装"
+                else
+                    _warn "libssl1.1 安装失败，snell v6 可能无法运行（beta 版本限制）"
+                fi
+                rm -f "$_tmp_deb"
+                ldconfig 2>/dev/null || true
+            fi
             ;;
         centos)
-            yum install -y -q c-ares 2>/dev/null || true
+            yum install -y -q c-ares openssl11 2>/dev/null || true
             ;;
     esac
     local version=""
