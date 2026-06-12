@@ -7134,21 +7134,14 @@ _get_snell_v5_version() {
 }
 
 _get_snell_v6_version() {
-    local version="未知"
+    local version="未安装"
 
     if check_cmd snell-server-v6; then
-        local output status
+        local output
         output=$(snell-server-v6 --version 2>&1)
-        status=$?
-        if [[ $status -ne 0 ]]; then
-            version="未安装"
-        else
-            # 兼容 6.0.0b1 格式（beta 后缀直接内嵌，无短横线）
-            version=$(printf '%s\n' "$output" | head -n 1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+[a-zA-Z0-9]*(-[0-9A-Za-z.]+)?' | head -n 1)
-            [[ -z "$version" ]] && version="未知"
-        fi
-    else
-        version="未安装"
+        # 兼容 6.0.0b1 格式（beta 后缀直接内嵌，无短横线）
+        version=$(printf '%s\n' "$output" | head -n 1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+[a-zA-Z0-9]*(-[0-9A-Za-z.]+)?' | head -n 1)
+        [[ -z "$version" ]] && version="已安装(版本未知)"
     fi
 
     echo "$version"
@@ -8031,11 +8024,22 @@ update_snell_v6_core() {
             _show_changelog_summary "surge-networks/snell" "$new_version" 10
         fi
         if [[ "$need_restart" == "true" ]]; then
+            # 更新场景：服务之前在跑，重启
             _info "重新启动 vless-snell-v6 服务..."
+            if svc start vless-snell-v6 2>/dev/null; then
+                _ok "服务已重启"
+            else
+                _err "服务重启失败，请手动检查: svc start vless-snell-v6"
+                return 1
+            fi
+        elif db_exists "xray" "snell-v6" && ! svc status vless-snell-v6 2>/dev/null; then
+            # 新安装场景：协议已配置但服务未运行（二进制之前缺失）→ 启动
+            _info "启动 vless-snell-v6 服务..."
+            svc enable vless-snell-v6 2>/dev/null || true
             if svc start vless-snell-v6 2>/dev/null; then
                 _ok "服务已启动"
             else
-                _err "服务启动失败，请手动检查配置: svc start vless-snell-v6"
+                _err "服务启动失败，请手动检查: svc start vless-snell-v6"
                 return 1
             fi
         fi
