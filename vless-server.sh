@@ -1,6 +1,6 @@
 #!/bin/bash 
 #═══════════════════════════════════════════════════════════════════════════════
-#  多协议代理一键部署脚本 v3.7.6 [服务端]
+#  多协议代理一键部署脚本 v3.7.7 [服务端]
 #  
 #  架构升级:
 #    • Xray 核心: 处理 TCP/TLS 协议 (VLESS/VMess/Trojan/SOCKS/SS2022)
@@ -17,7 +17,7 @@
 #  项目地址: https://github.com/afsfge/vless-all-in-one
 #═══════════════════════════════════════════════════════════════════════════════
 
-readonly VERSION="3.7.6"
+readonly VERSION="3.7.7"
 readonly AUTHOR="afsfge"
 readonly REPO_URL="https://github.com/afsfge/vless-all-in-one"
 readonly SCRIPT_REPO="afsfge/vless-all-in-one"
@@ -4543,41 +4543,32 @@ server {
         try_files \$uri \$uri/ =404;
     }
     
-    # 订阅文件目录（追加 ?ipv6=0 可获取不含 IPv6 节点的版本）
+    # 订阅文件目录（含 IPv6 版本）
     location ~ ^/sub/([a-f0-9-]+)/v2ray\$ {
+        alias $CFG/subscription/\$1/base64;
         default_type text/plain;
         add_header Content-Type "text/plain; charset=utf-8";
-        if (\$arg_ipv6 = "0") {
-            rewrite ^ /sub/\$1/_v2ray_no6 last;
-        }
-        alias $CFG/subscription/\$1/base64;
     }
-    location ~ ^/sub/([a-f0-9-]+)/_v2ray_no6\$ {
+    location ~ ^/sub/([a-f0-9-]+)/clash\$ {
+        alias $CFG/subscription/\$1/clash.yaml;
+        default_type text/yaml;
+    }
+    location ~ ^/sub/([a-f0-9-]+)/surge\$ {
+        alias $CFG/subscription/\$1/surge.conf;
+        default_type text/plain;
+    }
+
+    # 订阅文件目录（仅 IPv4 版本，路径加 _no6 后缀）
+    location ~ ^/sub/([a-f0-9-]+)/v2ray_no6\$ {
         alias $CFG/subscription/\$1/base64_no6;
         default_type text/plain;
         add_header Content-Type "text/plain; charset=utf-8";
     }
-
-    location ~ ^/sub/([a-f0-9-]+)/clash\$ {
-        default_type text/yaml;
-        if (\$arg_ipv6 = "0") {
-            rewrite ^ /sub/\$1/_clash_no6 last;
-        }
-        alias $CFG/subscription/\$1/clash.yaml;
-    }
-    location ~ ^/sub/([a-f0-9-]+)/_clash_no6\$ {
+    location ~ ^/sub/([a-f0-9-]+)/clash_no6\$ {
         alias $CFG/subscription/\$1/clash_no6.yaml;
         default_type text/yaml;
     }
-
-    location ~ ^/sub/([a-f0-9-]+)/surge\$ {
-        default_type text/plain;
-        if (\$arg_ipv6 = "0") {
-            rewrite ^ /sub/\$1/_surge_no6 last;
-        }
-        alias $CFG/subscription/\$1/surge.conf;
-    }
-    location ~ ^/sub/([a-f0-9-]+)/_surge_no6\$ {
+    location ~ ^/sub/([a-f0-9-]+)/surge_no6\$ {
         alias $CFG/subscription/\$1/surge_no6.conf;
         default_type text/plain;
     }
@@ -4640,41 +4631,32 @@ server {
         try_files \$uri \$uri/ =404;
     }
     
-    # 订阅文件目录（追加 ?ipv6=0 可获取不含 IPv6 节点的版本）
+    # 订阅文件目录（含 IPv6 版本）
     location ~ ^/sub/([a-f0-9-]+)/v2ray\$ {
+        alias $CFG/subscription/\$1/base64;
         default_type text/plain;
         add_header Content-Type "text/plain; charset=utf-8";
-        if (\$arg_ipv6 = "0") {
-            rewrite ^ /sub/\$1/_v2ray_no6 last;
-        }
-        alias $CFG/subscription/\$1/base64;
     }
-    location ~ ^/sub/([a-f0-9-]+)/_v2ray_no6\$ {
+    location ~ ^/sub/([a-f0-9-]+)/clash\$ {
+        alias $CFG/subscription/\$1/clash.yaml;
+        default_type text/yaml;
+    }
+    location ~ ^/sub/([a-f0-9-]+)/surge\$ {
+        alias $CFG/subscription/\$1/surge.conf;
+        default_type text/plain;
+    }
+
+    # 订阅文件目录（仅 IPv4 版本，路径加 _no6 后缀）
+    location ~ ^/sub/([a-f0-9-]+)/v2ray_no6\$ {
         alias $CFG/subscription/\$1/base64_no6;
         default_type text/plain;
         add_header Content-Type "text/plain; charset=utf-8";
     }
-
-    location ~ ^/sub/([a-f0-9-]+)/clash\$ {
-        default_type text/yaml;
-        if (\$arg_ipv6 = "0") {
-            rewrite ^ /sub/\$1/_clash_no6 last;
-        }
-        alias $CFG/subscription/\$1/clash.yaml;
-    }
-    location ~ ^/sub/([a-f0-9-]+)/_clash_no6\$ {
+    location ~ ^/sub/([a-f0-9-]+)/clash_no6\$ {
         alias $CFG/subscription/\$1/clash_no6.yaml;
         default_type text/yaml;
     }
-
-    location ~ ^/sub/([a-f0-9-]+)/surge\$ {
-        default_type text/plain;
-        if (\$arg_ipv6 = "0") {
-            rewrite ^ /sub/\$1/_surge_no6 last;
-        }
-        alias $CFG/subscription/\$1/surge.conf;
-    }
-    location ~ ^/sub/([a-f0-9-]+)/_surge_no6\$ {
+    location ~ ^/sub/([a-f0-9-]+)/surge_no6\$ {
         alias $CFG/subscription/\$1/surge_no6.conf;
         default_type text/plain;
     }
@@ -4703,41 +4685,32 @@ server {
         try_files \$uri \$uri/ =404;
     }
     
-    # 订阅文件目录（追加 ?ipv6=0 可获取不含 IPv6 节点的版本）
+    # 订阅文件目录（含 IPv6 版本）
     location ~ ^/sub/([a-f0-9-]+)/v2ray\$ {
+        alias $CFG/subscription/\$1/base64;
         default_type text/plain;
         add_header Content-Type "text/plain; charset=utf-8";
-        if (\$arg_ipv6 = "0") {
-            rewrite ^ /sub/\$1/_v2ray_no6 last;
-        }
-        alias $CFG/subscription/\$1/base64;
     }
-    location ~ ^/sub/([a-f0-9-]+)/_v2ray_no6\$ {
+    location ~ ^/sub/([a-f0-9-]+)/clash\$ {
+        alias $CFG/subscription/\$1/clash.yaml;
+        default_type text/yaml;
+    }
+    location ~ ^/sub/([a-f0-9-]+)/surge\$ {
+        alias $CFG/subscription/\$1/surge.conf;
+        default_type text/plain;
+    }
+
+    # 订阅文件目录（仅 IPv4 版本，路径加 _no6 后缀）
+    location ~ ^/sub/([a-f0-9-]+)/v2ray_no6\$ {
         alias $CFG/subscription/\$1/base64_no6;
         default_type text/plain;
         add_header Content-Type "text/plain; charset=utf-8";
     }
-
-    location ~ ^/sub/([a-f0-9-]+)/clash\$ {
-        default_type text/yaml;
-        if (\$arg_ipv6 = "0") {
-            rewrite ^ /sub/\$1/_clash_no6 last;
-        }
-        alias $CFG/subscription/\$1/clash.yaml;
-    }
-    location ~ ^/sub/([a-f0-9-]+)/_clash_no6\$ {
+    location ~ ^/sub/([a-f0-9-]+)/clash_no6\$ {
         alias $CFG/subscription/\$1/clash_no6.yaml;
         default_type text/yaml;
     }
-
-    location ~ ^/sub/([a-f0-9-]+)/surge\$ {
-        default_type text/plain;
-        if (\$arg_ipv6 = "0") {
-            rewrite ^ /sub/\$1/_surge_no6 last;
-        }
-        alias $CFG/subscription/\$1/surge.conf;
-    }
-    location ~ ^/sub/([a-f0-9-]+)/_surge_no6\$ {
+    location ~ ^/sub/([a-f0-9-]+)/surge_no6\$ {
         alias $CFG/subscription/\$1/surge_no6.conf;
         default_type text/plain;
     }
@@ -12249,7 +12222,7 @@ show_single_protocol_info() {
             local base_url="${sub_protocol}://${sub_domain:-$ipv4}:${sub_port}/sub/${sub_uuid}"
             echo -e "  ${Y}Clash/Clash Verge:${NC}"
             echo -e "  ${G}$base_url/clash${NC}"
-            echo -e "  ${D}不含IPv6: $base_url/clash?ipv6=0${NC}"
+            echo -e "  ${D}仅IPv4: $base_url/clash_no6${NC}"
         elif [[ "$web_service_running" == "true" ]]; then
             echo -e "  ${Y}订阅服务未配置，请在主菜单选择「订阅管理」进行配置${NC}"
         else
@@ -12266,7 +12239,7 @@ show_single_protocol_info() {
                 local base_url="https://${sub_domain:-$domain}:${sub_port}/sub/${sub_uuid}"
                 echo -e "  ${Y}Clash/Clash Verge:${NC}"
                 echo -e "  ${G}$base_url/clash${NC}"
-                echo -e "  ${D}不含IPv6: $base_url/clash?ipv6=0${NC}"
+                echo -e "  ${D}仅IPv4: $base_url/clash_no6${NC}"
             else
                 echo -e "  ${D}(订阅服务未启用，如需使用请在主菜单选择「订阅管理」)${NC}"
             fi
@@ -15247,44 +15220,34 @@ server {
     listen [::]:$sub_port$ssl_listen;
     server_name ${domain:-_};
 $ssl_block
-    # 订阅路径（追加 ?ipv6=0 可获取不含 IPv6 节点的版本）
-
+    # 订阅路径（含 IPv6 版本）
     location /sub/$sub_uuid/clash {
+        alias $sub_dir/clash.yaml;
         default_type text/yaml;
         add_header Content-Disposition 'attachment; filename="clash.yaml"';
-        if (\$arg_ipv6 = "0") {
-            rewrite ^ /sub/$sub_uuid/_clash_no6 last;
-        }
-        alias $sub_dir/clash.yaml;
     }
-    location = /sub/$sub_uuid/_clash_no6 {
+    location /sub/$sub_uuid/surge {
+        alias $sub_dir/surge.conf;
+        default_type text/plain;
+        add_header Content-Disposition 'attachment; filename="surge.conf"';
+    }
+    location /sub/$sub_uuid/v2ray {
+        alias $sub_dir/base64;
+        default_type text/plain;
+    }
+
+    # 订阅路径（仅 IPv4 版本，路径加 _no6 后缀）
+    location /sub/$sub_uuid/clash_no6 {
         alias $sub_dir/clash_no6.yaml;
         default_type text/yaml;
         add_header Content-Disposition 'attachment; filename="clash.yaml"';
     }
-
-    location /sub/$sub_uuid/surge {
-        default_type text/plain;
-        add_header Content-Disposition 'attachment; filename="surge.conf"';
-        if (\$arg_ipv6 = "0") {
-            rewrite ^ /sub/$sub_uuid/_surge_no6 last;
-        }
-        alias $sub_dir/surge.conf;
-    }
-    location = /sub/$sub_uuid/_surge_no6 {
+    location /sub/$sub_uuid/surge_no6 {
         alias $sub_dir/surge_no6.conf;
         default_type text/plain;
         add_header Content-Disposition 'attachment; filename="surge.conf"';
     }
-
-    location /sub/$sub_uuid/v2ray {
-        default_type text/plain;
-        if (\$arg_ipv6 = "0") {
-            rewrite ^ /sub/$sub_uuid/_v2ray_no6 last;
-        }
-        alias $sub_dir/base64;
-    }
-    location = /sub/$sub_uuid/_v2ray_no6 {
+    location /sub/$sub_uuid/v2ray_no6 {
         alias $sub_dir/base64_no6;
         default_type text/plain;
     }
@@ -15336,7 +15299,7 @@ show_sub_links() {
     local base_url="${protocol}://${sub_domain:-$ipv4}:${sub_port}/sub/${sub_uuid}"
 
     _line
-    echo -e "  ${W}订阅链接${NC}"
+    echo -e "  ${W}订阅链接（含 IPv4 + IPv6 节点）${NC}"
     _line
     echo -e "  ${Y}Clash/Clash Verge (推荐):${NC}"
     echo -e "  ${G}${base_url}/clash${NC}"
@@ -15347,10 +15310,18 @@ show_sub_links() {
     echo -e "  ${Y}V2Ray/Loon/通用:${NC}"
     echo -e "  ${G}${base_url}/v2ray${NC}"
     _line
-    echo -e "  ${D}订阅路径包含随机UUID，请妥善保管${NC}"
+    echo -e "  ${W}订阅链接（仅 IPv4 节点）${NC}"
+    _line
+    echo -e "  ${Y}Clash/Clash Verge:${NC}"
+    echo -e "  ${G}${base_url}/clash_no6${NC}"
     echo ""
-    echo -e "  ${Y}仅 IPv4 节点（不含 IPv6）：在链接末尾追加 ${W}?ipv6=0${NC}"
-    echo -e "  ${D}示例: ${base_url}/clash?ipv6=0${NC}"
+    echo -e "  ${Y}Surge:${NC}"
+    echo -e "  ${G}${base_url}/surge_no6${NC}"
+    echo ""
+    echo -e "  ${Y}V2Ray/Loon/通用:${NC}"
+    echo -e "  ${G}${base_url}/v2ray_no6${NC}"
+    _line
+    echo -e "  ${D}订阅路径包含随机UUID，请妥善保管${NC}"
     
     # HTTPS 自签名证书提示
     if [[ "$sub_https" == "true" && -z "$sub_domain" ]]; then
@@ -15549,41 +15520,32 @@ server {
     root /var/www/html;
     index index.html;
 
-    # 订阅路径（追加 ?ipv6=0 可获取不含 IPv6 节点的版本）
+    # 订阅路径（含 IPv6 版本）
     location ~ ^/sub/([a-f0-9-]+)/v2ray\$ {
+        alias $CFG/subscription/\$1/base64;
         default_type text/plain;
         add_header Content-Type "text/plain; charset=utf-8";
-        if (\$arg_ipv6 = "0") {
-            rewrite ^ /sub/\$1/_v2ray_no6 last;
-        }
-        alias $CFG/subscription/\$1/base64;
     }
-    location ~ ^/sub/([a-f0-9-]+)/_v2ray_no6\$ {
+    location ~ ^/sub/([a-f0-9-]+)/clash\$ {
+        alias $CFG/subscription/\$1/clash.yaml;
+        default_type text/yaml;
+    }
+    location ~ ^/sub/([a-f0-9-]+)/surge\$ {
+        alias $CFG/subscription/\$1/surge.conf;
+        default_type text/plain;
+    }
+
+    # 订阅路径（仅 IPv4 版本，路径加 _no6 后缀）
+    location ~ ^/sub/([a-f0-9-]+)/v2ray_no6\$ {
         alias $CFG/subscription/\$1/base64_no6;
         default_type text/plain;
         add_header Content-Type "text/plain; charset=utf-8";
     }
-
-    location ~ ^/sub/([a-f0-9-]+)/clash\$ {
-        default_type text/yaml;
-        if (\$arg_ipv6 = "0") {
-            rewrite ^ /sub/\$1/_clash_no6 last;
-        }
-        alias $CFG/subscription/\$1/clash.yaml;
-    }
-    location ~ ^/sub/([a-f0-9-]+)/_clash_no6\$ {
+    location ~ ^/sub/([a-f0-9-]+)/clash_no6\$ {
         alias $CFG/subscription/\$1/clash_no6.yaml;
         default_type text/yaml;
     }
-
-    location ~ ^/sub/([a-f0-9-]+)/surge\$ {
-        default_type text/plain;
-        if (\$arg_ipv6 = "0") {
-            rewrite ^ /sub/\$1/_surge_no6 last;
-        }
-        alias $CFG/subscription/\$1/surge.conf;
-    }
-    location ~ ^/sub/([a-f0-9-]+)/_surge_no6\$ {
+    location ~ ^/sub/([a-f0-9-]+)/surge_no6\$ {
         alias $CFG/subscription/\$1/surge_no6.conf;
         default_type text/plain;
     }
@@ -15606,41 +15568,32 @@ server {
     root /var/www/html;
     index index.html;
 
-    # 订阅路径（追加 ?ipv6=0 可获取不含 IPv6 节点的版本）
+    # 订阅路径（含 IPv6 版本）
     location ~ ^/sub/([a-f0-9-]+)/v2ray\$ {
+        alias $CFG/subscription/\$1/base64;
         default_type text/plain;
         add_header Content-Type "text/plain; charset=utf-8";
-        if (\$arg_ipv6 = "0") {
-            rewrite ^ /sub/\$1/_v2ray_no6 last;
-        }
-        alias $CFG/subscription/\$1/base64;
     }
-    location ~ ^/sub/([a-f0-9-]+)/_v2ray_no6\$ {
+    location ~ ^/sub/([a-f0-9-]+)/clash\$ {
+        alias $CFG/subscription/\$1/clash.yaml;
+        default_type text/yaml;
+    }
+    location ~ ^/sub/([a-f0-9-]+)/surge\$ {
+        alias $CFG/subscription/\$1/surge.conf;
+        default_type text/plain;
+    }
+
+    # 订阅路径（仅 IPv4 版本，路径加 _no6 后缀）
+    location ~ ^/sub/([a-f0-9-]+)/v2ray_no6\$ {
         alias $CFG/subscription/\$1/base64_no6;
         default_type text/plain;
         add_header Content-Type "text/plain; charset=utf-8";
     }
-
-    location ~ ^/sub/([a-f0-9-]+)/clash\$ {
-        default_type text/yaml;
-        if (\$arg_ipv6 = "0") {
-            rewrite ^ /sub/\$1/_clash_no6 last;
-        }
-        alias $CFG/subscription/\$1/clash.yaml;
-    }
-    location ~ ^/sub/([a-f0-9-]+)/_clash_no6\$ {
+    location ~ ^/sub/([a-f0-9-]+)/clash_no6\$ {
         alias $CFG/subscription/\$1/clash_no6.yaml;
         default_type text/yaml;
     }
-
-    location ~ ^/sub/([a-f0-9-]+)/surge\$ {
-        default_type text/plain;
-        if (\$arg_ipv6 = "0") {
-            rewrite ^ /sub/\$1/_surge_no6 last;
-        }
-        alias $CFG/subscription/\$1/surge.conf;
-    }
-    location ~ ^/sub/([a-f0-9-]+)/_surge_no6\$ {
+    location ~ ^/sub/([a-f0-9-]+)/surge_no6\$ {
         alias $CFG/subscription/\$1/surge_no6.conf;
         default_type text/plain;
     }
