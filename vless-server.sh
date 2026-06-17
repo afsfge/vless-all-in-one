@@ -4548,28 +4548,38 @@ server {
         default_type text/plain;
         add_header Content-Type "text/plain; charset=utf-8";
         if (\$arg_ipv6 = "0") {
-            alias $CFG/subscription/\$1/base64_no6;
-            break;
+            rewrite ^ /sub/\$1/_v2ray_no6 last;
         }
         alias $CFG/subscription/\$1/base64;
+    }
+    location ~ ^/sub/([a-f0-9-]+)/_v2ray_no6\$ {
+        alias $CFG/subscription/\$1/base64_no6;
+        default_type text/plain;
+        add_header Content-Type "text/plain; charset=utf-8";
     }
 
     location ~ ^/sub/([a-f0-9-]+)/clash\$ {
         default_type text/yaml;
         if (\$arg_ipv6 = "0") {
-            alias $CFG/subscription/\$1/clash_no6.yaml;
-            break;
+            rewrite ^ /sub/\$1/_clash_no6 last;
         }
         alias $CFG/subscription/\$1/clash.yaml;
+    }
+    location ~ ^/sub/([a-f0-9-]+)/_clash_no6\$ {
+        alias $CFG/subscription/\$1/clash_no6.yaml;
+        default_type text/yaml;
     }
 
     location ~ ^/sub/([a-f0-9-]+)/surge\$ {
         default_type text/plain;
         if (\$arg_ipv6 = "0") {
-            alias $CFG/subscription/\$1/surge_no6.conf;
-            break;
+            rewrite ^ /sub/\$1/_surge_no6 last;
         }
         alias $CFG/subscription/\$1/surge.conf;
+    }
+    location ~ ^/sub/([a-f0-9-]+)/_surge_no6\$ {
+        alias $CFG/subscription/\$1/surge_no6.conf;
+        default_type text/plain;
     }
 
     # 订阅文件目录 - 通用
@@ -4635,28 +4645,38 @@ server {
         default_type text/plain;
         add_header Content-Type "text/plain; charset=utf-8";
         if (\$arg_ipv6 = "0") {
-            alias $CFG/subscription/\$1/base64_no6;
-            break;
+            rewrite ^ /sub/\$1/_v2ray_no6 last;
         }
         alias $CFG/subscription/\$1/base64;
+    }
+    location ~ ^/sub/([a-f0-9-]+)/_v2ray_no6\$ {
+        alias $CFG/subscription/\$1/base64_no6;
+        default_type text/plain;
+        add_header Content-Type "text/plain; charset=utf-8";
     }
 
     location ~ ^/sub/([a-f0-9-]+)/clash\$ {
         default_type text/yaml;
         if (\$arg_ipv6 = "0") {
-            alias $CFG/subscription/\$1/clash_no6.yaml;
-            break;
+            rewrite ^ /sub/\$1/_clash_no6 last;
         }
         alias $CFG/subscription/\$1/clash.yaml;
+    }
+    location ~ ^/sub/([a-f0-9-]+)/_clash_no6\$ {
+        alias $CFG/subscription/\$1/clash_no6.yaml;
+        default_type text/yaml;
     }
 
     location ~ ^/sub/([a-f0-9-]+)/surge\$ {
         default_type text/plain;
         if (\$arg_ipv6 = "0") {
-            alias $CFG/subscription/\$1/surge_no6.conf;
-            break;
+            rewrite ^ /sub/\$1/_surge_no6 last;
         }
         alias $CFG/subscription/\$1/surge.conf;
+    }
+    location ~ ^/sub/([a-f0-9-]+)/_surge_no6\$ {
+        alias $CFG/subscription/\$1/surge_no6.conf;
+        default_type text/plain;
     }
 
     # 订阅文件目录 - 通用
@@ -4688,28 +4708,38 @@ server {
         default_type text/plain;
         add_header Content-Type "text/plain; charset=utf-8";
         if (\$arg_ipv6 = "0") {
-            alias $CFG/subscription/\$1/base64_no6;
-            break;
+            rewrite ^ /sub/\$1/_v2ray_no6 last;
         }
         alias $CFG/subscription/\$1/base64;
+    }
+    location ~ ^/sub/([a-f0-9-]+)/_v2ray_no6\$ {
+        alias $CFG/subscription/\$1/base64_no6;
+        default_type text/plain;
+        add_header Content-Type "text/plain; charset=utf-8";
     }
 
     location ~ ^/sub/([a-f0-9-]+)/clash\$ {
         default_type text/yaml;
         if (\$arg_ipv6 = "0") {
-            alias $CFG/subscription/\$1/clash_no6.yaml;
-            break;
+            rewrite ^ /sub/\$1/_clash_no6 last;
         }
         alias $CFG/subscription/\$1/clash.yaml;
+    }
+    location ~ ^/sub/([a-f0-9-]+)/_clash_no6\$ {
+        alias $CFG/subscription/\$1/clash_no6.yaml;
+        default_type text/yaml;
     }
 
     location ~ ^/sub/([a-f0-9-]+)/surge\$ {
         default_type text/plain;
         if (\$arg_ipv6 = "0") {
-            alias $CFG/subscription/\$1/surge_no6.conf;
-            break;
+            rewrite ^ /sub/\$1/_surge_no6 last;
         }
         alias $CFG/subscription/\$1/surge.conf;
+    }
+    location ~ ^/sub/([a-f0-9-]+)/_surge_no6\$ {
+        alias $CFG/subscription/\$1/surge_no6.conf;
+        default_type text/plain;
     }
 
     # 订阅文件目录 - 通用
@@ -15217,36 +15247,46 @@ server {
     listen [::]:$sub_port$ssl_listen;
     server_name ${domain:-_};
 $ssl_block
-    # 订阅路径 (alias 直指文件，避免 try_files 误判)
-    # 追加 ?ipv6=0 可获取不含 IPv6 节点的订阅版本
+    # 订阅路径（追加 ?ipv6=0 可获取不含 IPv6 节点的版本）
 
     location /sub/$sub_uuid/clash {
         default_type text/yaml;
         add_header Content-Disposition 'attachment; filename="clash.yaml"';
         if (\$arg_ipv6 = "0") {
-            alias $sub_dir/clash_no6.yaml;
-            break;
+            rewrite ^ /sub/$sub_uuid/_clash_no6 last;
         }
         alias $sub_dir/clash.yaml;
+    }
+    location = /sub/$sub_uuid/_clash_no6 {
+        alias $sub_dir/clash_no6.yaml;
+        default_type text/yaml;
+        add_header Content-Disposition 'attachment; filename="clash.yaml"';
     }
 
     location /sub/$sub_uuid/surge {
         default_type text/plain;
         add_header Content-Disposition 'attachment; filename="surge.conf"';
         if (\$arg_ipv6 = "0") {
-            alias $sub_dir/surge_no6.conf;
-            break;
+            rewrite ^ /sub/$sub_uuid/_surge_no6 last;
         }
         alias $sub_dir/surge.conf;
+    }
+    location = /sub/$sub_uuid/_surge_no6 {
+        alias $sub_dir/surge_no6.conf;
+        default_type text/plain;
+        add_header Content-Disposition 'attachment; filename="surge.conf"';
     }
 
     location /sub/$sub_uuid/v2ray {
         default_type text/plain;
         if (\$arg_ipv6 = "0") {
-            alias $sub_dir/base64_no6;
-            break;
+            rewrite ^ /sub/$sub_uuid/_v2ray_no6 last;
         }
         alias $sub_dir/base64;
+    }
+    location = /sub/$sub_uuid/_v2ray_no6 {
+        alias $sub_dir/base64_no6;
+        default_type text/plain;
     }
 
     location /sub/$sub_uuid/ {
@@ -15514,28 +15554,38 @@ server {
         default_type text/plain;
         add_header Content-Type "text/plain; charset=utf-8";
         if (\$arg_ipv6 = "0") {
-            alias $CFG/subscription/\$1/base64_no6;
-            break;
+            rewrite ^ /sub/\$1/_v2ray_no6 last;
         }
         alias $CFG/subscription/\$1/base64;
+    }
+    location ~ ^/sub/([a-f0-9-]+)/_v2ray_no6\$ {
+        alias $CFG/subscription/\$1/base64_no6;
+        default_type text/plain;
+        add_header Content-Type "text/plain; charset=utf-8";
     }
 
     location ~ ^/sub/([a-f0-9-]+)/clash\$ {
         default_type text/yaml;
         if (\$arg_ipv6 = "0") {
-            alias $CFG/subscription/\$1/clash_no6.yaml;
-            break;
+            rewrite ^ /sub/\$1/_clash_no6 last;
         }
         alias $CFG/subscription/\$1/clash.yaml;
+    }
+    location ~ ^/sub/([a-f0-9-]+)/_clash_no6\$ {
+        alias $CFG/subscription/\$1/clash_no6.yaml;
+        default_type text/yaml;
     }
 
     location ~ ^/sub/([a-f0-9-]+)/surge\$ {
         default_type text/plain;
         if (\$arg_ipv6 = "0") {
-            alias $CFG/subscription/\$1/surge_no6.conf;
-            break;
+            rewrite ^ /sub/\$1/_surge_no6 last;
         }
         alias $CFG/subscription/\$1/surge.conf;
+    }
+    location ~ ^/sub/([a-f0-9-]+)/_surge_no6\$ {
+        alias $CFG/subscription/\$1/surge_no6.conf;
+        default_type text/plain;
     }
 
     location / {
@@ -15561,28 +15611,38 @@ server {
         default_type text/plain;
         add_header Content-Type "text/plain; charset=utf-8";
         if (\$arg_ipv6 = "0") {
-            alias $CFG/subscription/\$1/base64_no6;
-            break;
+            rewrite ^ /sub/\$1/_v2ray_no6 last;
         }
         alias $CFG/subscription/\$1/base64;
+    }
+    location ~ ^/sub/([a-f0-9-]+)/_v2ray_no6\$ {
+        alias $CFG/subscription/\$1/base64_no6;
+        default_type text/plain;
+        add_header Content-Type "text/plain; charset=utf-8";
     }
 
     location ~ ^/sub/([a-f0-9-]+)/clash\$ {
         default_type text/yaml;
         if (\$arg_ipv6 = "0") {
-            alias $CFG/subscription/\$1/clash_no6.yaml;
-            break;
+            rewrite ^ /sub/\$1/_clash_no6 last;
         }
         alias $CFG/subscription/\$1/clash.yaml;
+    }
+    location ~ ^/sub/([a-f0-9-]+)/_clash_no6\$ {
+        alias $CFG/subscription/\$1/clash_no6.yaml;
+        default_type text/yaml;
     }
 
     location ~ ^/sub/([a-f0-9-]+)/surge\$ {
         default_type text/plain;
         if (\$arg_ipv6 = "0") {
-            alias $CFG/subscription/\$1/surge_no6.conf;
-            break;
+            rewrite ^ /sub/\$1/_surge_no6 last;
         }
         alias $CFG/subscription/\$1/surge.conf;
+    }
+    location ~ ^/sub/([a-f0-9-]+)/_surge_no6\$ {
+        alias $CFG/subscription/\$1/surge_no6.conf;
+        default_type text/plain;
     }
 
     location / {
