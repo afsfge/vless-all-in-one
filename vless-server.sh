@@ -7199,19 +7199,28 @@ _get_snell_v6_version() {
     echo "$version"
 }
 
-# 从 KB 获取 Snell v6.x.x 版本列表（过滤主版本号 >= 6）
-# KB 标题格式: "### v6.0.0 Beta 1"（Beta 与版本号空格分隔）
-# 下载文件格式: snell-server-v6.0.0b1-linux-amd64.zip（b1 内嵌）
-# 因此需要两步转换: "6.0.0 Beta 1" → "6.0.0b1"
+# 从 KB 获取 Snell v6.x.x 版本列表（解析下载链接，支持 beta 版 6.0.0bN 和未来正式版 6.0.0）
+# KB 页面中 ### v6.0.0 Beta 是总标题而非具体版本，不能解析 header；
+# 真实版本号嵌在下载链接中，如: snell-server-v6.0.0b3-linux-amd64.zip
+# 排序策略：正式版（无字母后缀）优先，beta 版（有字母后缀）次之；各组内按版本号倒序。
+# 不依赖 sort -V 跨类型比较（macOS 与 Linux GNU sort 行为不一致）。
 _get_snell_v6_versions_from_kb() {
     local limit="${1:-10}"
-    local result versions
+    local result stable_vers beta_vers
     result=$(curl -sL --connect-timeout 5 --max-time 10 "$SNELL_RELEASE_NOTES_URL" 2>/dev/null)
     [[ -z "$result" ]] && return 1
-    versions=$(printf '%s\n' "$result" | \
-        sed -E 's/^(### v[0-9]+\.[0-9]+\.[0-9]+) Beta ([0-9]+)/\1b\2/' | \
-        sed -nE 's/^### v([0-9]+\.[0-9]+\.[0-9]+[a-zA-Z0-9]*).*/\1/p' | \
-        awk -F. '$1+0 >= 6' | head -n "$limit")
+    # 正式版：snell-server-v6.x.x-linux（无字母后缀）
+    stable_vers=$(printf '%s\n' "$result" | \
+        grep -oE 'snell-server-v6\.[0-9]+\.[0-9]+-linux-amd64' | \
+        grep -oE '6\.[0-9]+\.[0-9]+' | \
+        sort -rV | uniq)
+    # beta 版：snell-server-v6.x.xbN-linux（字母+数字后缀）
+    beta_vers=$(printf '%s\n' "$result" | \
+        grep -oE 'snell-server-v6\.[0-9]+\.[0-9]+[a-zA-Z][0-9]+-linux-amd64' | \
+        grep -oE '6\.[0-9]+\.[0-9]+[a-zA-Z][0-9]+' | \
+        sort -rV | uniq)
+    local versions
+    versions=$(printf '%s\n%s\n' "$stable_vers" "$beta_vers" | grep -v '^$' | head -n "$limit")
     [[ -z "$versions" ]] && return 1
     echo "$versions"
 }
@@ -7223,20 +7232,25 @@ _get_snell_v6_latest_version() {
 
     # 统一用 surge-networks/snell-v6 作为缓存 key（与 _update_core_with_channel_select 保持一致）
     local cache_file="$VERSION_CACHE_DIR/surge-networks_snell-v6"
-    if [[ "$force" != "true" ]] && _is_cache_fresh "$cache_file"; then
-        cat "$cache_file" 2>/dev/null
-        return 0
-    fi
 
-    if [[ "$force" != "true" && "$use_cache" == "true" ]]; then
-        if [[ -f "$cache_file" ]]; then
-            local cached
-            cached=$(cat "$cache_file" 2>/dev/null)
-            # v6 版本号含 beta 后缀 (如 6.0.0b1)，不做 plain version 校验
-            if [[ -n "$cached" && "$cached" =~ ^[0-9] ]]; then
-                echo "$cached"
+    if [[ "$force" != "true" ]]; then
+        local cached_val=""
+        if _is_cache_fresh "$cache_file" || [[ "$use_cache" == "true" && -f "$cache_file" ]]; then
+            cached_val=$(cat "$cache_file" 2>/dev/null)
+        fi
+        if [[ -n "$cached_val" && "$cached_val" =~ ^[0-9] ]]; then
+            # beta 版（含字母后缀，如 6.0.0b3）直接信任
+            if [[ "$cached_val" =~ [a-zA-Z] ]]; then
+                echo "$cached_val"
                 return 0
             fi
+            # 纯正式版号（如 6.0.0）：做 HEAD 验证防止旧 parser bug 写入不存在的版本
+            local check_url="https://dl.nssurge.com/snell/snell-server-v${cached_val}-linux-amd64.zip"
+            if curl -sI --connect-timeout 3 --max-time 5 "$check_url" 2>/dev/null | grep -q "HTTP.*200"; then
+                echo "$cached_val"
+                return 0
+            fi
+            # 下载链接 404，缓存值无效，继续往下刷新
         fi
     fi
 
@@ -7852,12 +7866,18 @@ _show_core_versions() {
         local snellv6_current
         snellv6_current=$(_get_snell_v6_version)
 
+        # 通过 _get_snell_v6_latest_version 读取（含缓存验证，防止旧 bug 写入的假正式版）
         local snellv6_latest
-        snellv6_latest=$(_get_cached_version "surge-networks/snell-v6" 2>/dev/null)
-        # v6 版本号含 beta 后缀 (如 6.0.0b1)，不能用 _is_plain_version 过滤
-        [[ -z "$snellv6_latest" || ! "$snellv6_latest" =~ ^[0-9] ]] && snellv6_latest="$SNELL_V6_DEFAULT_VERSION"
+        snellv6_latest=$(_get_snell_v6_latest_version "true" 2>/dev/null)
+        [[ -z "$snellv6_latest" ]] && snellv6_latest="$SNELL_V6_DEFAULT_VERSION"
 
-        echo -e "  ${W}Snell v6 (Beta)${NC}"
+        # 标题：beta 版显示 "(Beta)"，正式版发布后去掉括号
+        if [[ "$snellv6_latest" =~ [a-zA-Z] ]]; then
+            echo -e "  ${W}Snell v6 (Beta)${NC}"
+        else
+            echo -e "  ${W}Snell v6${NC}"
+        fi
+
         if [[ "$snellv6_current" == "未安装" ]]; then
             echo -e "    ${W}当前版本:${NC} ${D}${snellv6_current}${NC}"
         else
@@ -7865,10 +7885,11 @@ _show_core_versions() {
             echo -e "    ${W}当前版本:${NC} ${G}v${snellv6_current}${NC}${snellv6_status}"
         fi
 
+        # "最新版本"对 beta 和正式版均适用（区别于其他核心的"稳定版本"）
         if ! _is_version_unknown "$snellv6_latest"; then
-            echo -e "    ${NC}${W}稳定版本:${NC} ${C}v${snellv6_latest}${NC}"
+            echo -e "    ${NC}${W}最新版本:${NC} ${C}v${snellv6_latest}${NC}"
         else
-            echo -e "    ${NC}${W}稳定版本:${NC} ${D}${snellv6_latest}${NC}"
+            echo -e "    ${NC}${W}最新版本:${NC} ${D}${snellv6_latest}${NC}"
         fi
     fi
 
@@ -8220,8 +8241,9 @@ _update_core_with_channel_select() {
         # 防止 v6 污染：确保显示的是 v5.x
         [[ "$(printf '%s' "$stable_ver" | cut -d. -f1)" != "5" ]] && stable_ver="$SNELL_DEFAULT_VERSION"
     elif [[ "$repo" == "surge-networks/snell-v6" ]]; then
-        # v6 版本号含 beta 后缀 (如 6.0.0b1)，不能用 _is_plain_version 校验
-        [[ "$stable_ver" == "获取中..." || ! "$stable_ver" =~ ^[0-9] ]] && stable_ver="$SNELL_V6_DEFAULT_VERSION"
+        # v6 版本通过专用函数获取（含缓存验证，防止旧 bug 写入不存在的正式版号）
+        stable_ver=$(_get_snell_v6_latest_version "true" 2>/dev/null)
+        [[ -z "$stable_ver" ]] && stable_ver="$SNELL_V6_DEFAULT_VERSION"
         [[ "$prerelease_ver" == "获取中..." ]] && prerelease_ver="无"
     else
         local unavailable_file="$VERSION_CACHE_DIR/$(echo "$repo" | tr '/' '_')_unavailable"
@@ -8239,7 +8261,12 @@ _update_core_with_channel_select() {
         echo ""
         local stable_label="v${stable_ver}"
         _is_version_unknown "$stable_ver" && stable_label="${stable_ver}"
-        _item "1" "稳定版 (${stable_label})"
+        # v6 在 beta 期间没有正式版，用"最新版"；正式版发布后版本号无字母后缀时改回"稳定版"
+        local channel_label_1="稳定版"
+        if [[ "$core_name" == "Snell v6" && "$stable_ver" =~ [a-zA-Z] ]]; then
+            channel_label_1="最新版"
+        fi
+        _item "1" "${channel_label_1} (${stable_label})"
         _item "2" "指定版本"
         _item "0" "返回"
         _line
