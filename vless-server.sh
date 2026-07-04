@@ -17,7 +17,7 @@
 #  项目地址: https://github.com/afsfge/vless-all-in-one
 #═══════════════════════════════════════════════════════════════════════════════
 
-readonly VERSION="3.7.9"
+readonly VERSION="3.7.10"
 readonly AUTHOR="afsfge"
 readonly REPO_URL="https://github.com/afsfge/vless-all-in-one"
 readonly SCRIPT_REPO="afsfge/vless-all-in-one"
@@ -15444,20 +15444,57 @@ setup_subscription_interactive() {
     echo -e "  ${W}配置订阅服务${NC}"
     _line
     
-    # 询问是否重新生成 UUID
-    if [[ -f "$CFG/sub_uuid" ]]; then
-        echo -e "  ${Y}检测到已有订阅 UUID${NC}"
-        read -rp "  是否重新生成 UUID? [y/N]: " regen_uuid
-        if [[ "$regen_uuid" =~ ^[yY]$ ]]; then
-            local old_uuid=$(cat "$CFG/sub_uuid")
-            reset_sub_uuid
-            local new_uuid=$(cat "$CFG/sub_uuid")
-            _ok "UUID 已更新: ${old_uuid:0:8}... → ${new_uuid:0:8}..."
-            # 清理旧的订阅目录
-            rm -rf "$CFG/subscription/$old_uuid" 2>/dev/null
-        fi
-        echo ""
+    # 询问 UUID 处理方式
+    local cur_uuid=""
+    [[ -f "$CFG/sub_uuid" ]] && cur_uuid=$(cat "$CFG/sub_uuid")
+    echo -e "  ${D}订阅 UUID 来源${NC}"
+    if [[ -n "$cur_uuid" ]]; then
+        echo -e "  ${G}1${NC}) 沿用现有 UUID  ${D}(${cur_uuid:0:8}...)${NC}"
+    else
+        echo -e "  ${D}1) 沿用现有 UUID  (暂无)${NC}"
     fi
+    echo -e "  ${G}2${NC}) 生成新的 UUID"
+    echo -e "  ${G}3${NC}) 手动输入 UUID"
+    local uuid_choice
+    while true; do
+        read -rp "  请选择 [1]: " uuid_choice
+        uuid_choice="${uuid_choice:-1}"
+        case "$uuid_choice" in
+            1)
+                if [[ -n "$cur_uuid" ]]; then
+                    _ok "沿用现有 UUID: ${cur_uuid:0:8}..."
+                else
+                    _warn "暂无现有 UUID，将自动生成"
+                    get_sub_uuid >/dev/null
+                fi
+                break
+                ;;
+            2)
+                local old_uuid="$cur_uuid"
+                reset_sub_uuid
+                local new_uuid=$(cat "$CFG/sub_uuid")
+                _ok "UUID 已更新: ${old_uuid:0:8}... → ${new_uuid:0:8}..."
+                [[ -n "$old_uuid" ]] && rm -rf "$CFG/subscription/$old_uuid" 2>/dev/null
+                break
+                ;;
+            3)
+                local manual_uuid
+                while true; do
+                    read -rp "  请输入 UUID: " manual_uuid
+                    [[ -z "$manual_uuid" ]] && { _err "UUID 不能为空"; continue; }
+                    [[ "$manual_uuid" =~ ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$ ]] && break
+                    _err "UUID 格式无效，格式应为: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                done
+                [[ -n "$cur_uuid" && "$cur_uuid" != "$manual_uuid" ]] && rm -rf "$CFG/subscription/$cur_uuid" 2>/dev/null
+                echo "$manual_uuid" > "$CFG/sub_uuid"
+                chmod 600 "$CFG/sub_uuid"
+                _ok "UUID 已设置: ${manual_uuid:0:8}..."
+                break
+                ;;
+            *) _err "请输入 1、2 或 3" ;;
+        esac
+    done
+    echo ""
     
     # 安装 Nginx
     if ! check_cmd nginx; then
@@ -16320,46 +16357,7 @@ _add_user() {
     local uuid
     case "$proto" in
         vless|vless-xhttp|vless-ws|vless-vision|tuic)
-            echo ""
-            echo -e "  ${D}UUID 来源${NC}"
-            local old_uuid=$(db_get_field "$core" "$proto" "uuid")
-            echo -e "  ${G}1${NC}) 生成新的 UUID"
-            if [[ -n "$old_uuid" ]]; then
-                echo -e "  ${G}2${NC}) 沿用现有 UUID  ${D}(${old_uuid:0:8}...)${NC}"
-            else
-                echo -e "  ${D}2) 沿用现有 UUID  (暂无)${NC}"
-            fi
-            echo -e "  ${G}3${NC}) 手动输入 UUID"
-            local uuid_choice
-            while true; do
-                read -rp "  请选择 [1]: " uuid_choice
-                uuid_choice="${uuid_choice:-1}"
-                case "$uuid_choice" in
-                    1)
-                        uuid=$(gen_uuid)
-                        break
-                        ;;
-                    2)
-                        if [[ -n "$old_uuid" ]]; then
-                            uuid="$old_uuid"
-                        else
-                            _warn "暂无现有 UUID，将自动生成"
-                            uuid=$(gen_uuid)
-                        fi
-                        break
-                        ;;
-                    3)
-                        while true; do
-                            read -rp "  请输入 UUID: " uuid
-                            [[ -z "$uuid" ]] && { _err "UUID 不能为空"; continue; }
-                            [[ "$uuid" =~ ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$ ]] && break
-                            _err "UUID 格式无效，格式应为: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-                        done
-                        break
-                        ;;
-                    *) _err "请输入 1、2 或 3" ;;
-                esac
-            done
+            uuid=$(gen_uuid)
             ;;
         ss2022)
             # SS2022 需要根据加密方式生成密钥
