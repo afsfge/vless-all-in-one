@@ -16320,7 +16320,46 @@ _add_user() {
     local uuid
     case "$proto" in
         vless|vless-xhttp|vless-ws|vless-vision|tuic)
-            uuid=$(gen_uuid)
+            echo ""
+            echo -e "  ${D}UUID 来源${NC}"
+            local old_uuid=$(db_get_field "$core" "$proto" "uuid")
+            echo -e "  ${G}1${NC}) 生成新的 UUID"
+            if [[ -n "$old_uuid" ]]; then
+                echo -e "  ${G}2${NC}) 沿用现有 UUID  ${D}(${old_uuid:0:8}...)${NC}"
+            else
+                echo -e "  ${D}2) 沿用现有 UUID  (暂无)${NC}"
+            fi
+            echo -e "  ${G}3${NC}) 手动输入 UUID"
+            local uuid_choice
+            while true; do
+                read -rp "  请选择 [1]: " uuid_choice
+                uuid_choice="${uuid_choice:-1}"
+                case "$uuid_choice" in
+                    1)
+                        uuid=$(gen_uuid)
+                        break
+                        ;;
+                    2)
+                        if [[ -n "$old_uuid" ]]; then
+                            uuid="$old_uuid"
+                        else
+                            _warn "暂无现有 UUID，将自动生成"
+                            uuid=$(gen_uuid)
+                        fi
+                        break
+                        ;;
+                    3)
+                        while true; do
+                            read -rp "  请输入 UUID: " uuid
+                            [[ -z "$uuid" ]] && { _err "UUID 不能为空"; continue; }
+                            [[ "$uuid" =~ ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$ ]] && break
+                            _err "UUID 格式无效，格式应为: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                        done
+                        break
+                        ;;
+                    *) _err "请输入 1、2 或 3" ;;
+                esac
+            done
             ;;
         ss2022)
             # SS2022 需要根据加密方式生成密钥
