@@ -1,6 +1,6 @@
 #!/bin/bash 
 #═══════════════════════════════════════════════════════════════════════════════
-#  多协议代理一键部署脚本 v3.7.12 [服务端]
+#  多协议代理一键部署脚本 v3.7.13 [服务端]
 #  
 #  架构升级:
 #    • Xray 核心: 处理 TCP/TLS 协议 (VLESS/VMess/Trojan/SOCKS/SS2022)
@@ -17,7 +17,7 @@
 #  项目地址: https://github.com/afsfge/vless-all-in-one
 #═══════════════════════════════════════════════════════════════════════════════
 
-readonly VERSION="3.7.12"
+readonly VERSION="3.7.13"
 readonly AUTHOR="afsfge"
 readonly REPO_URL="https://github.com/afsfge/vless-all-in-one"
 readonly SCRIPT_REPO="afsfge/vless-all-in-one"
@@ -6274,6 +6274,10 @@ readonly SNELL_RELEASE_NOTES_URL="https://kb.nssurge.com/surge-knowledge-base/re
 readonly SNELL_RELEASE_NOTES_ZH_URL="https://kb.nssurge.com/surge-knowledge-base/zh/release-notes/snell.md"
 readonly SNELL_DEFAULT_VERSION="5.0.1"
 readonly SNELL_V6_DEFAULT_VERSION="6.0.0rc"
+# 已安装版本标记文件。Snell v6 二进制的 --version 不输出预发布后缀
+# (rc 构建只报 6.0.0), 无法区分 RC 与正式版。安装时把精确版本(含 rc 后缀)
+# 持久化到此文件, 版本检测优先读取它, 以正确判断是否有新版可更新。
+readonly SNELL_V6_INSTALLED_VERSION_FILE="$CFG/snell-v6-version"
 
 # 获取文件修改时间戳（跨平台兼容）
 _get_file_mtime() {
@@ -7189,6 +7193,16 @@ _get_snell_v6_version() {
     local version="未安装"
 
     if check_cmd snell-server-v6; then
+        # 优先读安装时持久化的精确版本(含 rc/beta 后缀), 区分 RC 与正式版
+        if [[ -f "$SNELL_V6_INSTALLED_VERSION_FILE" ]]; then
+            local marker
+            marker=$(cat "$SNELL_V6_INSTALLED_VERSION_FILE" 2>/dev/null)
+            if [[ "$marker" =~ ^[0-9]+\.[0-9]+\.[0-9]+[a-zA-Z0-9]*$ ]]; then
+                echo "$marker"
+                return 0
+            fi
+        fi
+        # 回退: 解析二进制 --version (有损, rc 构建只报 6.0.0)
         local output
         output=$(snell-server-v6 --version 2>&1)
         # 兼容 6.0.0b1 格式（beta 后缀直接内嵌，无短横线）
@@ -7884,13 +7898,23 @@ _show_core_versions() {
             echo -e "    ${W}当前版本:${NC} ${D}${snellv6_current}${NC}"
         else
             local snellv6_status
-            # Snell v6 二进制的 --version 不输出预发布后缀（rc 构建只报 6.0.0），
-            # 故比较时剥掉最新版的字母后缀，避免已安装 RC 仍被误标 [可更新]
-            local snellv6_latest_base="${snellv6_latest%%[a-zA-Z]*}"
-            if [[ -n "$snellv6_latest_base" && "$snellv6_current" == "$snellv6_latest_base" ]]; then
-                snellv6_status=""
-            else
+            if [[ -f "$SNELL_V6_INSTALLED_VERSION_FILE" ]]; then
+                # 已有精确版本标记: 直接比较 (当前 6.0.0rc vs 最新 6.0.0 -> 可更新)
                 snellv6_status=$(_get_version_status "$snellv6_current" "$snellv6_latest" "无")
+            else
+                # 无标记(旧装/手装): 二进制 --version 有损(rc 只报 6.0.0)。
+                # 仍在预发布阶段(最新版带字母后缀)时剥后缀比较, 避免误标 [可更新];
+                # 最新版已是正式版时直接比较, 提示更新(更新后会写入标记, 后续精确)
+                if [[ "$snellv6_latest" =~ [a-zA-Z] ]]; then
+                    local snellv6_latest_base="${snellv6_latest%%[a-zA-Z]*}"
+                    if [[ -n "$snellv6_latest_base" && "$snellv6_current" == "$snellv6_latest_base" ]]; then
+                        snellv6_status=""
+                    else
+                        snellv6_status=$(_get_version_status "$snellv6_current" "$snellv6_latest" "无")
+                    fi
+                else
+                    snellv6_status=$(_get_version_status "$snellv6_current" "$snellv6_latest" "无")
+                fi
             fi
             echo -e "    ${W}当前版本:${NC} ${G}v${snellv6_current}${NC}${snellv6_status}"
         fi
@@ -9535,6 +9559,8 @@ install_snell_v6() {
             rm -rf "$tmp"
             # 更新版本缓存为实际安装的版本
             _save_version_cache "surge-networks/snell-v6" "$ver"
+            # 持久化精确版本(含 rc/beta 后缀), 供版本检测区分 RC 与正式版
+            echo "$ver" > "$SNELL_V6_INSTALLED_VERSION_FILE" 2>/dev/null || true
             _ok "Snell v$ver 已安装"; return 0
         fi
         rm -rf "$tmp"; return 1
