@@ -1,6 +1,6 @@
 #!/bin/bash 
 #═══════════════════════════════════════════════════════════════════════════════
-#  多协议代理一键部署脚本 v3.7.7 [服务端]
+#  多协议代理一键部署脚本 v3.7.11 [服务端]
 #  
 #  架构升级:
 #    • Xray 核心: 处理 TCP/TLS 协议 (VLESS/VMess/Trojan/SOCKS/SS2022)
@@ -17,7 +17,7 @@
 #  项目地址: https://github.com/afsfge/vless-all-in-one
 #═══════════════════════════════════════════════════════════════════════════════
 
-readonly VERSION="3.7.10"
+readonly VERSION="3.7.11"
 readonly AUTHOR="afsfge"
 readonly REPO_URL="https://github.com/afsfge/vless-all-in-one"
 readonly SCRIPT_REPO="afsfge/vless-all-in-one"
@@ -6273,7 +6273,7 @@ readonly SCRIPT_VERSION_CACHE_FILE="$VERSION_CACHE_DIR/.script_version"
 readonly SNELL_RELEASE_NOTES_URL="https://kb.nssurge.com/surge-knowledge-base/release-notes/snell.md"
 readonly SNELL_RELEASE_NOTES_ZH_URL="https://kb.nssurge.com/surge-knowledge-base/zh/release-notes/snell.md"
 readonly SNELL_DEFAULT_VERSION="5.0.1"
-readonly SNELL_V6_DEFAULT_VERSION="6.0.0b1"
+readonly SNELL_V6_DEFAULT_VERSION="6.0.0rc"
 
 # 获取文件修改时间戳（跨平台兼容）
 _get_file_mtime() {
@@ -7199,10 +7199,10 @@ _get_snell_v6_version() {
     echo "$version"
 }
 
-# 从 KB 获取 Snell v6.x.x 版本列表（解析下载链接，支持 beta 版 6.0.0bN 和未来正式版 6.0.0）
-# KB 页面中 ### v6.0.0 Beta 是总标题而非具体版本，不能解析 header；
-# 真实版本号嵌在下载链接中，如: snell-server-v6.0.0b3-linux-amd64.zip
-# 排序策略：正式版（无字母后缀）优先，beta 版（有字母后缀）次之；各组内按版本号倒序。
+# 从 KB 获取 Snell v6.x.x 版本列表（解析下载链接，支持预发布版 6.0.0bN / 6.0.0rc[N] 和未来正式版 6.0.0）
+# KB 页面中 ### v6.0.0 Beta / RC 是总标题而非具体版本，不能解析 header；
+# 真实版本号嵌在下载链接中，如: snell-server-v6.0.0b3-linux-amd64.zip / snell-server-v6.0.0rc-linux-amd64.zip
+# 排序策略：正式版（无字母后缀）优先，预发布版（有字母后缀）次之；各组内按版本号倒序。
 # 不依赖 sort -V 跨类型比较（macOS 与 Linux GNU sort 行为不一致）。
 _get_snell_v6_versions_from_kb() {
     local limit="${1:-10}"
@@ -7214,10 +7214,10 @@ _get_snell_v6_versions_from_kb() {
         grep -oE 'snell-server-v6\.[0-9]+\.[0-9]+-linux-amd64' | \
         grep -oE '6\.[0-9]+\.[0-9]+' | \
         sort -rV | uniq)
-    # beta 版：snell-server-v6.x.xbN-linux（字母+数字后缀）
+    # 预发布版：snell-server-v6.x.x{后缀}-linux（字母+可选数字后缀，兼容 b3 / rc / rc1 等）
     beta_vers=$(printf '%s\n' "$result" | \
-        grep -oE 'snell-server-v6\.[0-9]+\.[0-9]+[a-zA-Z][0-9]+-linux-amd64' | \
-        grep -oE '6\.[0-9]+\.[0-9]+[a-zA-Z][0-9]+' | \
+        grep -oE 'snell-server-v6\.[0-9]+\.[0-9]+[a-zA-Z]+[0-9]*-linux-amd64' | \
+        grep -oE '6\.[0-9]+\.[0-9]+[a-zA-Z]+[0-9]*' | \
         sort -rV | uniq)
     local versions
     versions=$(printf '%s\n%s\n' "$stable_vers" "$beta_vers" | grep -v '^$' | head -n "$limit")
@@ -7871,8 +7871,10 @@ _show_core_versions() {
         snellv6_latest=$(_get_snell_v6_latest_version "true" 2>/dev/null)
         [[ -z "$snellv6_latest" ]] && snellv6_latest="$SNELL_V6_DEFAULT_VERSION"
 
-        # 标题：beta 版显示 "(Beta)"，正式版发布后去掉括号
-        if [[ "$snellv6_latest" =~ [a-zA-Z] ]]; then
+        # 标题：预发布版显示 "(RC)"/"(Beta)"，正式版发布后去掉括号
+        if [[ "$snellv6_latest" =~ rc ]]; then
+            echo -e "  ${W}Snell v6 (RC)${NC}"
+        elif [[ "$snellv6_latest" =~ [a-zA-Z] ]]; then
             echo -e "  ${W}Snell v6 (Beta)${NC}"
         else
             echo -e "  ${W}Snell v6${NC}"
