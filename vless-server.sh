@@ -1,6 +1,6 @@
 #!/bin/bash 
 #═══════════════════════════════════════════════════════════════════════════════
-#  多协议代理一键部署脚本 v3.7.11 [服务端]
+#  多协议代理一键部署脚本 v3.7.12 [服务端]
 #  
 #  架构升级:
 #    • Xray 核心: 处理 TCP/TLS 协议 (VLESS/VMess/Trojan/SOCKS/SS2022)
@@ -17,7 +17,7 @@
 #  项目地址: https://github.com/afsfge/vless-all-in-one
 #═══════════════════════════════════════════════════════════════════════════════
 
-readonly VERSION="3.7.11"
+readonly VERSION="3.7.12"
 readonly AUTHOR="afsfge"
 readonly REPO_URL="https://github.com/afsfge/vless-all-in-one"
 readonly SCRIPT_REPO="afsfge/vless-all-in-one"
@@ -7883,7 +7883,15 @@ _show_core_versions() {
         if [[ "$snellv6_current" == "未安装" ]]; then
             echo -e "    ${W}当前版本:${NC} ${D}${snellv6_current}${NC}"
         else
-            local snellv6_status=$(_get_version_status "$snellv6_current" "$snellv6_latest" "无")
+            local snellv6_status
+            # Snell v6 二进制的 --version 不输出预发布后缀（rc 构建只报 6.0.0），
+            # 故比较时剥掉最新版的字母后缀，避免已安装 RC 仍被误标 [可更新]
+            local snellv6_latest_base="${snellv6_latest%%[a-zA-Z]*}"
+            if [[ -n "$snellv6_latest_base" && "$snellv6_current" == "$snellv6_latest_base" ]]; then
+                snellv6_status=""
+            else
+                snellv6_status=$(_get_version_status "$snellv6_current" "$snellv6_latest" "无")
+            fi
             echo -e "    ${W}当前版本:${NC} ${G}v${snellv6_current}${NC}${snellv6_status}"
         fi
 
