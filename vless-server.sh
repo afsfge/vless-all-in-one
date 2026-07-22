@@ -1,6 +1,6 @@
 #!/bin/bash 
 #═══════════════════════════════════════════════════════════════════════════════
-#  多协议代理一键部署脚本 v3.7.13 [服务端]
+#  多协议代理一键部署脚本 v3.7.14 [服务端]
 #  
 #  架构升级:
 #    • Xray 核心: 处理 TCP/TLS 协议 (VLESS/VMess/Trojan/SOCKS/SS2022)
@@ -17,7 +17,7 @@
 #  项目地址: https://github.com/afsfge/vless-all-in-one
 #═══════════════════════════════════════════════════════════════════════════════
 
-readonly VERSION="3.7.13"
+readonly VERSION="3.7.14"
 readonly AUTHOR="afsfge"
 readonly REPO_URL="https://github.com/afsfge/vless-all-in-one"
 readonly SCRIPT_REPO="afsfge/vless-all-in-one"
@@ -9499,9 +9499,9 @@ install_snell_v6() {
         aarch64) sarch="aarch64" ;;
         *) _err "Snell v6 不支持当前架构 $(uname -m)，仅支持 amd64/aarch64"; return 1 ;;
     esac
-    # Snell v6 beta 依赖两个动态库（v4/v5 完全静态链接，v6 不是）：
-    #   libcares.so.2   - c-ares DNS 库
-    #   libcrypto.so.1.1 - OpenSSL 1.1（Debian 12 / Ubuntu 22.04+ 已移除）
+    # Snell v6 动态依赖 c-ares DNS 库（libcares.so.2）；v4/v5 为完全静态链接。
+    # 注: 早期 beta 曾依赖 libcrypto.so.1.1 (OpenSSL 1.1), 现版本已不再依赖,
+    # 兼容 Debian 12 / Ubuntu 22.04+ 的 OpenSSL 3, 无需额外检测。
     case "$DISTRO" in
         alpine)
             apk add --no-cache c-ares upx &>/dev/null
@@ -9513,14 +9513,9 @@ install_snell_v6() {
                 || apt-get install -y -qq libcares2 2>/dev/null \
                 || apt-get install -y -qq libc-ares2 2>/dev/null \
                 || true
-            # 检查 libcrypto.so.1.1 是否存在（Debian 12 / Ubuntu 22.04+ 已升级到 OpenSSL 3）
-            if ! ldconfig -p 2>/dev/null | grep -q "libcrypto.so.1.1"; then
-                _warn "系统缺少 libcrypto.so.1.1 (OpenSSL 1.1)，Snell v6 beta 可能无法运行"
-                _warn "如服务启动失败，请手动安装 libssl1.1，或等待官方发布兼容 OpenSSL 3 的版本"
-            fi
             ;;
         centos)
-            yum install -y -q c-ares openssl11 2>/dev/null || true
+            yum install -y -q c-ares 2>/dev/null || true
             ;;
     esac
     local version=""
