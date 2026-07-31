@@ -54,6 +54,15 @@ info "写入 sysctl 配置: $BBR_CONF"
 cat > "$BBR_CONF" << 'EOF'
 net.core.default_qdisc=fq
 net.ipv4.tcp_congestion_control=bbr
+
+# TCP Fast Open — 减少代理握手延迟
+net.ipv4.tcp_fastopen = 3
+
+# 空闲后不重新慢启动，避免突发流量卡顿
+net.ipv4.tcp_slow_start_after_idle = 0
+
+# 不缓存上次连接的路由指标，避免继承劣化值
+net.ipv4.tcp_no_metrics_save = 1
 EOF
 sysctl -p "$BBR_CONF"
 # 验证是否生效
@@ -63,6 +72,11 @@ if [[ "$CC" == "bbr" ]]; then
 else
     warn "BBR 配置已写入，但当前内核可能需要重启后生效 (当前: $CC)"
 fi
+# 验证代理优化项
+TFO=$(sysctl -n net.ipv4.tcp_fastopen 2>/dev/null || echo "?")
+SSAI=$(sysctl -n net.ipv4.tcp_slow_start_after_idle 2>/dev/null || echo "?")
+NMS=$(sysctl -n net.ipv4.tcp_no_metrics_save 2>/dev/null || echo "?")
+info "tcp_fastopen=$TFO  slow_start_after_idle=$SSAI  no_metrics_save=$NMS"
 
 # ============================================================
 # 阶段 5：修改 SSH 监听端口
