@@ -1,6 +1,6 @@
 #!/bin/bash 
 #═══════════════════════════════════════════════════════════════════════════════
-#  多协议代理一键部署脚本 v3.7.14 [服务端]
+#  多协议代理一键部署脚本 v3.7.15 [服务端]
 #  
 #  架构升级:
 #    • Xray 核心: 处理 TCP/TLS 协议 (VLESS/VMess/Trojan/SOCKS/SS2022)
@@ -17,7 +17,7 @@
 #  项目地址: https://github.com/afsfge/vless-all-in-one
 #═══════════════════════════════════════════════════════════════════════════════
 
-readonly VERSION="3.7.14"
+readonly VERSION="3.7.15"
 readonly AUTHOR="afsfge"
 readonly REPO_URL="https://github.com/afsfge/vless-all-in-one"
 readonly SCRIPT_REPO="afsfge/vless-all-in-one"
@@ -15178,6 +15178,9 @@ gen_surge_sub() {
             esac
             
             if [[ -n "$proxy" ]]; then
+                case "$protocol" in
+                    snell-v6|snell-v6-shadowtls) proxy+=", block-quic=adaptive" ;;
+                esac
                 proxies+="$proxy"$'\n'
                 [[ -n "$proxy_names" ]] && proxy_names+=", "
                 proxy_names+="$name"
