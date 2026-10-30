@@ -144,6 +144,18 @@ for proto in snell snell-v5 snell-v6; do
     # Subscriptions must retain every port under distinct names.
     gen_surge_sub > "$CFG/sub.conf"
     grep -q "🇺🇸S$version-3003-v4-on = snell," "$CFG/sub.conf"
+    expected="🇺🇸S$version-3003-v4-on, 🇺🇸S$version-3002-v4-off, 🇺🇸S$version-3001-v4-off"
+    grep -Fxq "Proxy = select, $expected" "$CFG/sub.conf"
+    actual=$(grep ' = snell,' "$CFG/sub.conf" | cut -d' ' -f1 | paste -sd, -)
+    [[ "$actual" == "${expected//, /,}" ]]
+    # Unknown fields sort last; the same ordering applies independently to IPv6.
+    mv "$CFG/$proto.conf" "$CFG/legacy-backup"
+    get_ipv6() { echo 2001:db8::1; }
+    gen_surge_sub > "$CFG/dual-sub.conf"
+    expected="🇺🇸S$version-3003-v4-on, 🇺🇸S$version-3001-v4-off, 🇺🇸S$version-3002-v4-unknown, 🇺🇸S$version-3003-v6-on, 🇺🇸S$version-3001-v6-off, 🇺🇸S$version-3002-v6-unknown"
+    grep -Fxq "Proxy = select, $expected" "$CFG/dual-sub.conf"
+    get_ipv6() { :; }
+    mv "$CFG/legacy-backup" "$CFG/$proto.conf"
     for port in 3001 3002 3003; do grep -q ", $port, psk=" "$CFG/sub.conf"; done
     [[ $(sed -n '/^\[Proxy\]$/,/^\[Proxy Group\]$/p' "$CFG/sub.conf" | grep ' = snell,' | cut -d= -f1 | sort | uniq -d | wc -l) -eq 0 ]]
     DISTRO=alpine

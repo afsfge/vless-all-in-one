@@ -1,6 +1,6 @@
 #!/bin/bash 
 #═══════════════════════════════════════════════════════════════════════════════
-#  多协议代理一键部署脚本 v3.7.17 [服务端]
+#  多协议代理一键部署脚本 v3.7.18 [服务端]
 #  
 #  架构升级:
 #    • Xray 核心: 处理 TCP/TLS 协议 (VLESS/VMess/Trojan/SOCKS/SS2022)
@@ -17,7 +17,7 @@
 #  项目地址: https://github.com/afsfge/vless-all-in-one
 #═══════════════════════════════════════════════════════════════════════════════
 
-readonly VERSION="3.7.17"
+readonly VERSION="3.7.18"
 readonly AUTHOR="afsfge"
 readonly REPO_URL="https://github.com/afsfge/vless-all-in-one"
 readonly SCRIPT_REPO="afsfge/vless-all-in-one"
@@ -15355,6 +15355,24 @@ gen_surge_sub() {
             cfg_stream=$(echo "$cfg" | jq -c '.')
         fi
         
+        if is_snell_protocol "$protocol"; then
+            local on_instances="" off_instances="" other_instances="" instance_name instance_port
+            local sort_version="${protocol#snell-v}"
+            [[ "$protocol" == snell ]] && sort_version=4
+            # 分组时保留数据库顺序，节点定义与策略组共用排序后的流。
+            while IFS= read -r cfg; do
+                [[ -n "$cfg" ]] || continue
+                instance_port=$(jq -r '.port' <<< "$cfg")
+                instance_name=$(snell_node_name "$server_ip" "$instance_port" "$sort_version" "$country_code")
+                case "$instance_name" in
+                    *-on) on_instances+="$cfg"$'\n' ;;
+                    *-off) off_instances+="$cfg"$'\n' ;;
+                    *) other_instances+="$cfg"$'\n' ;;
+                esac
+            done <<< "$cfg_stream"
+            cfg_stream="${on_instances}${off_instances}${other_instances}"
+        fi
+
         while IFS= read -r cfg; do
             [[ -z "$cfg" ]] && continue
             

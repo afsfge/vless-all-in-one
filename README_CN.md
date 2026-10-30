@@ -25,3 +25,5 @@ BASH_BIN=/usr/local/bin/bash python3 tests/test_snell_instances.py
 ```
 
 测试使用临时目录和模拟服务管理命令，不安装服务或连接生产服务器。
+
+Surge 订阅按 IPv4 入口、IPv6 入口分组，各组内 Snell v6/v5/v4 优先；同一普通 Snell 协议内按 `on → off → auto/unknown` 排列，相同状态保留实例原顺序。节点定义与策略组使用相同顺序。
