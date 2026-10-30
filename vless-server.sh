@@ -1,6 +1,6 @@
 #!/bin/bash 
 #═══════════════════════════════════════════════════════════════════════════════
-#  多协议代理一键部署脚本 v3.7.16 [服务端]
+#  多协议代理一键部署脚本 v3.7.17 [服务端]
 #  
 #  架构升级:
 #    • Xray 核心: 处理 TCP/TLS 协议 (VLESS/VMess/Trojan/SOCKS/SS2022)
@@ -17,7 +17,7 @@
 #  项目地址: https://github.com/afsfge/vless-all-in-one
 #═══════════════════════════════════════════════════════════════════════════════
 
-readonly VERSION="3.7.16"
+readonly VERSION="3.7.17"
 readonly AUTHOR="afsfge"
 readonly REPO_URL="https://github.com/afsfge/vless-all-in-one"
 readonly SCRIPT_REPO="afsfge/vless-all-in-one"
@@ -2051,6 +2051,97 @@ declare -A SVC_PROC=(
     [nginx]="nginx"
 )
 
+# 普通 Snell 按端口保存实例；没有 instance 字段的旧节点继续使用原文件和服务。
+is_snell_protocol() {
+    [[ "$1" == snell || "$1" == snell-v5 || "$1" == snell-v6 ]]
+}
+
+snell_instance_names() {
+    db_get xray "$1" | jq -r --arg p "$1" '
+        if type == "array" then .[] else . end | .instance // $p'
+}
+
+snell_active_services() {
+    local service
+    while IFS= read -r service; do
+        _svc_one status "$service" && echo "$service"
+    done < <(snell_service_names "$1")
+    return 0
+}
+
+snell_service_names() {
+    snell_instance_names "$1" | sed 's/^/vless-/'
+}
+
+_write_snell_instance() {
+    local protocol="$1" psk="$2" port="$3" version="$4"
+    local instance="${protocol}-${port}" previous="" tmp config
+    [[ "$port" =~ ^[0-9]+$ && "$port" -ge 1 && "$port" -le 65535 ]] || return 1
+    if [[ "$INSTALL_MODE" == replace ]]; then
+        previous=$(db_get_port_config xray "$protocol" "$REPLACE_PORT")
+        [[ -n "$previous" ]] || { _err "待覆盖的 Snell 实例不存在"; return 1; }
+        instance=$(jq -r --arg p "$protocol" '.instance // $p' <<< "$previous")
+    fi
+    if [[ "$INSTALL_MODE" != replace ]]; then
+        local suffix=0
+        while [[ -e "$CFG/$instance.conf" ]] || snell_instance_names "$protocol" | grep -qx "$instance"; do
+            ((suffix+=1))
+            instance="${protocol}-${port}-${suffix}"
+        done
+    fi
+    if db_list_ports xray "$protocol" | grep -qx "$port"; then
+        [[ "$INSTALL_MODE" == replace && "$port" == "$REPLACE_PORT" ]] || {
+            _err "Snell 端口实例已存在: $port"; return 1;
+        }
+    fi
+    [[ "$instance" == "$protocol" || "$instance" =~ ^${protocol}(-[0-9]+){1,2}$ ]] || return 1
+    mkdir -p "$CFG" || return 1
+    tmp=$(mktemp "$CFG/.snell-config.XXXXXX") || return 1
+    cat > "$tmp" || { rm -f "$tmp"; return 1; }
+    config=$(build_config psk "$psk" port "$port" version "$version" instance "$instance") || {
+        rm -f "$tmp"; return 1;
+    }
+    # 注册失败时保留原配置；临时文件位于同一目录，最终以 rename 替换。
+    local db_backup
+    [[ -f "$DB_FILE" ]] || init_db || { rm -f "$tmp"; return 1; }
+    db_backup=$(mktemp "$CFG/.snell-db.XXXXXX") || { rm -f "$tmp"; return 1; }
+    cp "$DB_FILE" "$db_backup" || { rm -f "$tmp" "$db_backup"; return 1; }
+    if ! register_protocol "$protocol" "$config"; then
+        mv "$db_backup" "$DB_FILE"
+        rm -f "$tmp"
+        return 1
+    fi
+    if ! mv "$tmp" "$CFG/$instance.conf"; then
+        mv "$db_backup" "$DB_FILE"
+        _db_touch
+        rm -f "$tmp"
+        return 1
+    fi
+    rm -f "$db_backup"
+    SNELL_INSTANCE="$instance"
+}
+
+remove_snell_instance() {
+    local protocol="$1" port="$2" config instance name
+    config=$(db_get_port_config xray "$protocol" "$port")
+    [[ -n "$config" ]] || return 1
+    instance=$(jq -r --arg p "$protocol" '.instance // $p' <<< "$config")
+    [[ "$instance" == "$protocol" || "$instance" =~ ^${protocol}(-[0-9]+){1,2}$ ]] || return 1
+    name="vless-$instance"
+    if _svc_one status "$name"; then
+        _svc_one stop "$name" || return 1
+    fi
+    _svc_one disable "$name" || return 1
+    db_remove_port xray "$protocol" "$port" || return 1
+    rm -f "$CFG/$instance.conf" "$CFG/$instance.join"
+    if [[ "$DISTRO" == alpine ]]; then
+        rm -f "/etc/init.d/$name"
+    else
+        rm -f "/etc/systemd/system/$name.service"
+        systemctl daemon-reload
+    fi
+}
+
 # 注册协议配置到数据库
 # 参数: $1=protocol, $2=config_json
 register_protocol() {
@@ -2085,8 +2176,10 @@ register_protocol() {
         db_add "$core" "$protocol" "$config_json"
     fi
     
+    local result=$?
     # 重置安装模式变量
     unset INSTALL_MODE REPLACE_PORT
+    return "$result"
 }
 
 unregister_protocol() {
@@ -5067,10 +5160,37 @@ gen_ss_legacy_link() {
     printf '%s\n' "ss://${userinfo}@${ip}:${port}#${name}"
 }
 
+# 名称展示配置中的 ipv6 开关，不推断实际出口（dns-ip-preference 可覆盖它）。
+snell_node_name() {
+    local ip="$1" port="$2" version="${3:-4}" country="$4"
+    local protocol=snell instance config value state=unknown family=v4
+    [[ "$version" != 4 ]] && protocol="snell-v$version"
+    config=$(db_get_port_config xray "$protocol" "$port")
+    [[ -n "$config" ]] || config='{}'
+    instance=$(jq -r --arg p "$protocol" '.instance // $p' <<< "$config" 2>/dev/null)
+    [[ -n "$instance" ]] || instance="$protocol"
+    if [[ "$instance" == "$protocol" || "$instance" =~ ^${protocol}(-[0-9]+){1,2}$ ]] && [[ -r "$CFG/$instance.conf" ]]; then
+        value=$(awk '
+            { sub(/\r$/, ""); sub(/[;#].*$/, ""); gsub(/^[ \t]+|[ \t]+$/, "") }
+            /^\[/ { section=tolower($0); next }
+            section == "[snell-server]" && tolower($0) ~ /^ipv6[ \t]*=/ {
+                sub(/^[^=]*=[ \t]*/, ""); gsub(/[ \t]+$/, ""); value=tolower($0); found=1
+            }
+            END { print found ? value : "__missing__" }
+        ' "$CFG/$instance.conf")
+        case "$value" in
+            true) state=on ;;
+            false) state=off ;;
+            __missing__) state=auto ;;
+        esac
+    fi
+    [[ "$ip" == *:* ]] && family=v6
+    printf '%sS%s-%s-%s-%s' "$(_country_flag "$country")" "$version" "$port" "$family" "$state"
+}
+
 gen_snell_link() {
     local ip="$1" port="$2" psk="$3" version="${4:-4}" country="${5:-}"
-    local ip_type=$(_ip_type_label "$ip")
-    local name="$(_country_prefix "$country")Snell-v${version}-${ip_type}"
+    local name=$(snell_node_name "$ip" "$port" "$version" "$country")
     local host="$ip"
     [[ "$host" != \[*\] && "$host" == *:* ]] && host="[$host]"
     printf '%s\n' "snell://${psk}@${host}:${port}?version=${version}#${name}"
@@ -7566,6 +7686,10 @@ _rollback_core_binary() {
 
 _update_core_to_version() {
     local core="$1" channel="$2" version="$3" service="$4" install_func="$5"
+    if is_snell_protocol "${service#vless-}"; then
+        local SNELL_UPDATE_SERVICES
+        SNELL_UPDATE_SERVICES=$(snell_active_services "${service#vless-}")
+    fi
     _check_core_update_deps || return 1
     _confirm_core_update_version "$core" "$channel" "$version" || return 1
 
@@ -8053,6 +8177,8 @@ update_singbox_core() {
 }
 
 update_snell_v5_core() {
+    local SNELL_UPDATE_SERVICES
+    SNELL_UPDATE_SERVICES=$(snell_active_services snell-v5)
     local channel="${1:-stable}"
     _check_core_update_deps || return 1
     _confirm_core_update "Snell v5" "$channel" || return 1
@@ -8069,7 +8195,9 @@ update_snell_v5_core() {
         need_restart=true
         _info "停止 vless-snell-v5 服务..."
         if ! svc stop vless-snell-v5 2>/dev/null; then
-            _warn "停止服务失败，继续更新"
+            _err "停止 Snell 实例失败，已终止更新"
+            svc start vless-snell-v5 >/dev/null 2>&1 || true
+            return 1
         fi
     fi
 
@@ -8105,6 +8233,8 @@ update_snell_v5_core() {
 }
 
 update_snell_v6_core() {
+    local SNELL_UPDATE_SERVICES
+    SNELL_UPDATE_SERVICES=$(snell_active_services snell-v6)
     local channel="${1:-stable}"
     _check_core_update_deps || return 1
     _confirm_core_update "Snell v6" "$channel" || return 1
@@ -8121,7 +8251,9 @@ update_snell_v6_core() {
         need_restart=true
         _info "停止 vless-snell-v6 服务..."
         if ! svc stop vless-snell-v6 2>/dev/null; then
-            _warn "停止服务失败，继续更新"
+            _err "停止 Snell 实例失败，已终止更新"
+            svc start vless-snell-v6 >/dev/null 2>&1 || true
+            return 1
         fi
     fi
 
@@ -9997,7 +10129,7 @@ gen_snell_server_config() {
         _has_ipv6 && ipv6_enabled="true"
     fi
 
-    cat > "$CFG/snell.conf" << EOF
+    _write_snell_instance "snell" "$psk" "$port" "$version" << EOF
 [snell-server]
 listen = $(_fmt_hostport "$listen_addr" "$port")
 psk = $psk
@@ -10005,11 +10137,11 @@ ipv6 = $ipv6_enabled
 obfs = off
 EOF
 
-    register_protocol "snell" "$(build_config psk "$psk" port "$port" version "$version")"
+    [[ $? -eq 0 ]] || return 1
 
-    _save_join_info "snell" "SNELL|%s|$port|$psk|$version" \
+    _save_join_info "$SNELL_INSTANCE" "SNELL|%s|$port|$psk|$version" \
         "gen_snell_link %s $port $psk $version"
-    cp "$CFG/snell.join" "$CFG/join.txt" 2>/dev/null
+    cp "$CFG/$SNELL_INSTANCE.join" "$CFG/join.txt" 2>/dev/null
     echo "server" > "$CFG/role"
 }
 
@@ -10299,7 +10431,7 @@ gen_snell_v5_server_config() {
     local ipv6_enabled="false"
     [[ "$listen_addr" == "::" ]] && ipv6_enabled="true"
 
-    cat > "$CFG/snell-v5.conf" << EOF
+    _write_snell_instance "snell-v5" "$psk" "$port" "$version" << EOF
 [snell-server]
 listen = $(_fmt_hostport "$listen_addr" "$port")
 psk = $psk
@@ -10308,10 +10440,10 @@ ipv6 = $ipv6_enabled
 obfs = off
 EOF
 
-    register_protocol "snell-v5" "$(build_config psk "$psk" port "$port" version "$version")"
-    _save_join_info "snell-v5" "SNELL-V5|%s|$port|$psk|$version" \
+    [[ $? -eq 0 ]] || return 1
+    _save_join_info "$SNELL_INSTANCE" "SNELL-V5|%s|$port|$psk|$version" \
         "gen_snell_v5_link %s $port $psk $version"
-    cp "$CFG/snell-v5.join" "$CFG/join.txt" 2>/dev/null
+    cp "$CFG/$SNELL_INSTANCE.join" "$CFG/join.txt" 2>/dev/null
     echo "server" > "$CFG/role"
 }
 
@@ -10328,7 +10460,7 @@ gen_snell_v6_server_config() {
         ipv6_enabled="true"
     fi
 
-    cat > "$CFG/snell-v6.conf" << EOF
+    _write_snell_instance "snell-v6" "$psk" "$port" "$version" << EOF
 [snell-server]
 listen = $listen_addr
 psk = $psk
@@ -10337,10 +10469,10 @@ ipv6 = $ipv6_enabled
 obfs = off
 EOF
 
-    register_protocol "snell-v6" "$(build_config psk "$psk" port "$port" version "$version")"
-    _save_join_info "snell-v6" "SNELL-V6|%s|$port|$psk|$version" \
+    [[ $? -eq 0 ]] || return 1
+    _save_join_info "$SNELL_INSTANCE" "SNELL-V6|%s|$port|$psk|$version" \
         "gen_snell_v6_link %s $port $psk $version"
-    cp "$CFG/snell-v6.join" "$CFG/join.txt" 2>/dev/null
+    cp "$CFG/$SNELL_INSTANCE.join" "$CFG/join.txt" 2>/dev/null
     echo "server" > "$CFG/role"
 }
 
@@ -10430,9 +10562,11 @@ get_all_services() {
                 has_xray=true ;;
             hy2|tuic|anytls)
                 has_singbox=true ;;
-            snell) services+="vless-snell:snell-server " ;;
-            snell-v5) services+="vless-snell-v5:snell-server-v5 " ;;
-            snell-v6) services+="vless-snell-v6:snell-server-v6 " ;;
+            snell|snell-v5|snell-v6)
+                local instance
+                for instance in $(jq -r --arg p "$proto" '.xray[$p] | if type == "array" then .[] else . end | .instance // $p' "$DB_FILE"); do
+                    services+="vless-$instance:snell-server${proto#snell} "
+                done ;;
             snell-shadowtls) services+="vless-snell-shadowtls:shadow-tls " ;;
             snell-v5-shadowtls) services+="vless-snell-v5-shadowtls:shadow-tls " ;;
             snell-v6-shadowtls) services+="vless-snell-v6-shadowtls:shadow-tls " ;;
@@ -10463,7 +10597,17 @@ while true; do
     for svc_info in $(get_all_services); do
         IFS=':' read -r svc_name proc_name <<< "$svc_info"
         # 多种方式检测进程 (使用兼容函数)
-        if ! _pgrep "$proc_name" && ! pgrep -f "$proc_name" > /dev/null 2>&1; then
+        local_running=false
+        if [[ "$svc_name" == vless-snell || "$svc_name" == vless-snell-v[56] || "$svc_name" =~ ^vless-snell(-v[56])?(-[0-9]+){1,2}$ ]]; then
+            if command -v systemctl >/dev/null 2>&1; then
+                systemctl is-active --quiet "$svc_name" && local_running=true
+            else
+                rc-service "$svc_name" status >/dev/null 2>&1 && local_running=true
+            fi
+        elif _pgrep "$proc_name" || pgrep -f "$proc_name" > /dev/null 2>&1; then
+            local_running=true
+        fi
+        if [[ "$local_running" != true ]]; then
             log "CRITICAL: $proc_name 进程不存在，尝试重启 $svc_name..."
             restart_service "$svc_name"
             sleep 5
@@ -10587,10 +10731,22 @@ EOFSCRIPT
 #═══════════════════════════════════════════════════════════════════════════════
 create_service() {
     local protocol="${1:-$(get_protocol)}"
+    if is_snell_protocol "$protocol" && [[ -z "$2" ]]; then
+        local instance
+        while IFS= read -r instance; do
+            [[ -n "$instance" ]] || continue
+            create_service "$protocol" "$instance" || return 1
+        done < <(snell_instance_names "$protocol")
+        return 0
+    fi
     local kind="${PROTO_KIND[$protocol]:-}"
     local service_name="${PROTO_SVC[$protocol]:-}"
     local exec_cmd="${PROTO_EXEC[$protocol]:-}"
     local exec_name="${PROTO_BIN[$protocol]:-}"
+    if is_snell_protocol "$protocol" && [[ -n "$2" ]]; then
+        service_name="vless-$2"
+        exec_cmd="/usr/local/bin/$exec_name -c $CFG/$2.conf"
+    fi
     local port password sni stls_password ss_backend_port snell_backend_port
 
     [[ -z "$service_name" ]] && { _err "未知协议: $protocol"; return 1; }
@@ -10733,7 +10889,23 @@ EOF
 
 
 
-svc() { # svc action service_name
+svc() { # 对普通 Snell 的协议服务操作覆盖该版本全部实例。
+    local action="$1" name="$2" protocol="${2#vless-}" service result=0
+    if is_snell_protocol "$protocol" && db_exists xray "$protocol"; then
+        local services
+        services=$(snell_service_names "$protocol")
+        # 升级只恢复升级前运行的实例，避免启动用户主动停止的节点。
+        [[ "${SNELL_UPDATE_SERVICES+x}" ]] && services="$SNELL_UPDATE_SERVICES"
+        [[ -z "$services" ]] && { [[ "$action" != status ]]; return; }
+        while IFS= read -r service; do
+            _svc_one "$action" "$service" || result=1
+        done <<< "$services"
+        return "$result"
+    fi
+    _svc_one "$action" "$name"
+}
+
+_svc_one() { # svc action service_name
     local action="$1" name="$2" err=/tmp/svc_error.log
     _svc_try() { : >"$err"; "$@" 2>"$err" || { [[ -s "$err" ]] && { _err "服务${action}失败:"; cat "$err"; }; rm -f "$err"; return 1; }; rm -f "$err"; }
 
@@ -10749,7 +10921,7 @@ svc() { # svc action service_name
                 local pidfile="/run/${name}.pid"
                 [[ -f "$pidfile" ]] && kill -0 "$(cat "$pidfile" 2>/dev/null)" 2>/dev/null && return 0
                 local p="${SVC_PROC[$name]:-}"
-                [[ -n "$p" ]] && _pgrep "$p" && return 0
+                [[ -n "$p" && "$name" != vless-snell* ]] && _pgrep "$p" && return 0
                 return 1
                 ;;
         esac
@@ -10853,6 +11025,16 @@ start_services() {
     local standalone_protocols=$(get_standalone_protocols)
     local ind_proto
     for ind_proto in $standalone_protocols; do
+        if is_snell_protocol "$ind_proto"; then
+            local snell_svc action
+            while IFS= read -r snell_svc; do
+                _svc_one enable "$snell_svc" || { failed_services+=("$snell_svc"); continue; }
+                action=start
+                _svc_one status "$snell_svc" && action=restart
+                _svc_one "$action" "$snell_svc" || failed_services+=("$snell_svc")
+            done < <(snell_service_names "$ind_proto")
+            continue
+        fi
         local service_name="vless-${ind_proto}"
         
         # ShadowTLS 组合协议需要先启动/重启后端服务
@@ -10960,6 +11142,15 @@ stop_services() {
     
     # 停止独立进程协议服务 (Snell 等)
     for proto in $STANDALONE_PROTOCOLS; do
+        if is_snell_protocol "$proto"; then
+            local snell_svc
+            while IFS= read -r snell_svc; do
+                if is_service_active "$snell_svc"; then
+                    _svc_one stop "$snell_svc" && stopped_services+=("$snell_svc")
+                fi
+            done < <(snell_service_names "$proto")
+            continue
+        fi
         local service_name="vless-${proto}"
         if is_service_active "$service_name"; then
             svc stop "$service_name" 2>/dev/null && stopped_services+=("$service_name")
@@ -11980,7 +12171,7 @@ show_single_protocol_info() {
             echo -e "  版本: ${G}v$version${NC}"
             echo ""
             echo -e "  ${Y}Surge 配置 (Snell 为 Surge 专属协议):${NC}"
-            echo -e "  ${C}${country_code}-Snell-v${version} = snell, ${config_ip}, ${display_port}, psk=${psk}, version=${version}, reuse=true, tfo=true${NC}"
+            echo -e "  ${C}$(snell_node_name "$config_ip" "$port" "$version" "$country_code") = snell, ${config_ip}, ${display_port}, psk=${psk}, version=${version}, reuse=true, tfo=true${NC}"
             ;;
         tuic)
             echo -e "  UUID: ${G}$uuid${NC}"
@@ -12412,8 +12603,8 @@ show_protocols_overview() {
         echo -e "  ${Y}独立协议 (独立服务):${NC}"
         for protocol in $standalone_protocols; do
             # 先从 xray 获取，如果为空再从 singbox 获取
-            local port=$(db_get_field "xray" "$protocol" "port")
-            [[ -z "$port" ]] && port=$(db_get_field "singbox" "$protocol" "port")
+            local port=$(db_list_ports "xray" "$protocol" | paste -sd, -)
+            [[ -z "$port" ]] && port=$(db_list_ports "singbox" "$protocol" | paste -sd, -)
             [[ -n "$port" ]] && echo -e "    ${G}●${NC} $(get_protocol_name $protocol) - 端口: ${G}$port${NC}"
         done
         echo ""
@@ -12456,6 +12647,17 @@ show_services_status() {
     # 独立进程协议服务状态 (Snell 等)
     local standalone_protocols=$(get_standalone_protocols)
     for protocol in $standalone_protocols; do
+        if is_snell_protocol "$protocol"; then
+            local service
+            while IFS= read -r service; do
+                if _svc_one status "$service"; then
+                    echo "  ● $service - 运行中"
+                else
+                    echo "  ● $service - 已停止"
+                fi
+            done < <(snell_service_names "$protocol")
+            continue
+        fi
         local service_name="vless-${protocol}"
         local proto_name=$(get_protocol_name $protocol)
         if svc status "$service_name" 2>/dev/null; then
@@ -12696,6 +12898,15 @@ uninstall_specific_protocol() {
             fi
             _ok "Sing-box 服务已停止"
         fi
+    elif is_snell_protocol "$selected_protocol"; then
+        local snell_ports="$SELECTED_PORT" snell_port
+        [[ "$snell_ports" == all ]] && snell_ports=$(db_list_ports xray "$selected_protocol")
+        for snell_port in $snell_ports; do
+            remove_snell_instance "$selected_protocol" "$snell_port" || {
+                _err "Snell 实例卸载失败: $snell_port"; return 1;
+            }
+        done
+        create_server_scripts
     else
         # 独立协议 (Snell/AnyTLS/ShadowTLS)：停止服务，删除配置和服务文件
         local service_name="vless-${selected_protocol}"
@@ -13088,6 +13299,7 @@ select_ss_version() {
 }
 
 do_install_server() {
+    local INSTALL_MODE="" REPLACE_PORT="" SNELL_INSTANCE=""
     # check_installed && { _warn "已安装，请先卸载"; return; }
     _header
     echo -e "  ${W}服务端安装向导${NC}"
@@ -13111,7 +13323,8 @@ do_install_server() {
     # 检查该协议是否已安装
     if is_protocol_installed "$protocol"; then
         # 处理已安装协议的多端口选择
-        if [[ "$core" != "standalone" ]]; then
+        if [[ "$core" != "standalone" ]] || is_snell_protocol "$protocol"; then
+            [[ "$core" == standalone ]] && core=xray
             handle_existing_protocol "$protocol" "$core" || return 1
         else
             # 独立协议保持原有的重新安装确认
@@ -13300,8 +13513,8 @@ do_install_server() {
     _info "生成配置参数..."
     
     # ===== 对于 Snell/SS2022，先询问是否启用 ShadowTLS =====
-    local skip_port_ask=false
-    if [[ "$protocol" == "snell" || "$protocol" == "snell-v5" || "$protocol" == "snell-v6" || "$protocol" == "ss2022" ]]; then
+    local skip_port_ask=false enable_stls_pre="n"
+    if [[ "$protocol" == ss2022 || ( -z "$INSTALL_MODE" && ( "$protocol" == snell || "$protocol" == snell-v5 || "$protocol" == snell-v6 ) ) ]]; then
         echo ""
         _line
         echo -e "  ${W}ShadowTLS 插件${NC}"
@@ -14208,11 +14421,11 @@ do_install_server() {
                 
                 _info "生成配置..."
                 if [[ "$version" == "4" ]]; then
-                    gen_snell_server_config "$psk" "$port" "$version"
+                    gen_snell_server_config "$psk" "$port" "$version" || return 1
                 elif [[ "$version" == "5" ]]; then
-                    gen_snell_v5_server_config "$psk" "$port" "$version"
+                    gen_snell_v5_server_config "$psk" "$port" "$version" || return 1
                 else
-                    gen_snell_v6_server_config "$psk" "$port" "$version"
+                    gen_snell_v6_server_config "$psk" "$port" "$version" || return 1
                 fi
             fi
             ;;
@@ -14367,7 +14580,7 @@ do_install_server() {
     
     _info "创建服务..."
     create_server_scripts  # 生成服务端辅助脚本（watchdog、hy2-nat、tuic-nat）
-    create_service "$protocol"
+    create_service "$protocol" || return 1
     _info "启动服务..."
     
     # 保存当前安装的协议名（防止被后续函数中的循环变量覆盖）
@@ -14457,6 +14670,11 @@ do_install_server() {
                 local cfg=$(db_get "singbox" "$current_protocol")
                 installed_port=$(echo "$cfg" | jq -r '.port')
             fi
+        fi
+
+        if is_snell_protocol "$current_protocol" && [[ -n "$SNELL_INSTANCE" ]]; then
+            installed_port=$(db_get xray "$current_protocol" | jq -r --arg instance "$SNELL_INSTANCE" '
+                if type == "array" then .[] else . end | select(.instance == $instance) | .port')
         fi
 
         # 显示刚安装的协议配置（不清屏，指定端口）
@@ -14866,6 +15084,11 @@ gen_clash_sub() {
             fi
 
             local name="$(_country_prefix "$country_code")$(_sub_proto_label $protocol)-$(_ip_type_label "$server_ip")"
+            if is_snell_protocol "$protocol"; then
+                local snell_version="${protocol#snell-v}"
+                [[ "$protocol" == snell ]] && snell_version=4
+                name=$(snell_node_name "$server_ip" "$port" "$snell_version" "$country_code")
+            fi
             local proxy=""
             
             case "$protocol" in
@@ -15146,6 +15369,11 @@ gen_surge_sub() {
             
             local stls_password=$(echo "$cfg" | jq -r '.stls_password // empty')
             local name="$(_country_prefix "$country_code")$(_sub_proto_label $protocol)-$(_ip_type_label "$server_ip")"
+            if is_snell_protocol "$protocol"; then
+                local snell_version="${protocol#snell-v}"
+                [[ "$protocol" == snell ]] && snell_version=4
+                name=$(snell_node_name "$server_ip" "$port" "$snell_version" "$country_code")
+            fi
             local proxy=""
             # Surge 代理行语法不接受 [IPv6] 方括号，统一脱括号后使用
             local _ip="${server_ip#[}"; _ip="${_ip%]}"
@@ -15924,6 +16152,22 @@ show_service_logs() {
             ;;
     esac
     
+    if is_snell_protocol "$selected"; then
+        local -a snell_units=()
+        local unit unit_choice
+        while IFS= read -r unit; do snell_units+=("$unit"); done < <(snell_service_names "$selected")
+        if [[ ${#snell_units[@]} -gt 1 ]]; then
+            for unit_choice in "${!snell_units[@]}"; do
+                echo "  $((unit_choice+1))) ${snell_units[$unit_choice]}"
+            done
+            read -rp "  选择实例（0 返回）: " unit_choice
+            [[ "$unit_choice" =~ ^[0-9]+$ && "$unit_choice" -ge 1 && "$unit_choice" -le ${#snell_units[@]} ]] || return
+            service_name="${snell_units[$((unit_choice-1))]}"
+        else
+            service_name="${snell_units[0]}"
+        fi
+        proc_name="$service_name"
+    fi
     _line
     echo -e "  ${C}$selected 服务日志 (最近 50 行):${NC}"
     _line
