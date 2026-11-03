@@ -1,6 +1,6 @@
 #!/bin/bash 
 #═══════════════════════════════════════════════════════════════════════════════
-#  多协议代理一键部署脚本 v3.7.18 [服务端]
+#  多协议代理一键部署脚本 v3.7.19 [服务端]
 #  
 #  架构升级:
 #    • Xray 核心: 处理 TCP/TLS 协议 (VLESS/VMess/Trojan/SOCKS/SS2022)
@@ -17,7 +17,7 @@
 #  项目地址: https://github.com/afsfge/vless-all-in-one
 #═══════════════════════════════════════════════════════════════════════════════
 
-readonly VERSION="3.7.18"
+readonly VERSION="3.7.19"
 readonly AUTHOR="afsfge"
 readonly REPO_URL="https://github.com/afsfge/vless-all-in-one"
 readonly SCRIPT_REPO="afsfge/vless-all-in-one"
@@ -15416,7 +15416,7 @@ gen_surge_sub() {
                     [[ -n "$_ip" ]] && proxy="$name = anytls, $_ip, $port, password=$password, sni=$sni, skip-cert-verify=true"
                     ;;
                 snell|snell-v5|snell-v6)
-                    [[ -n "$_ip" ]] && proxy="$name = snell, $_ip, $port, psk=$psk, version=${version:-4}"
+                    [[ -n "$_ip" ]] && proxy="$name = snell, $_ip, $port, psk=$psk, version=${version:-4}, tfo=true"
                     ;;
                 snell-shadowtls|snell-v5-shadowtls|snell-v6-shadowtls)
                     [[ -n "$_ip" ]] && proxy="$name = snell, $_ip, $port, psk=$psk, version=${version:-4}, reuse=true, tfo=true, shadow-tls-password=$stls_password, shadow-tls-sni=$sni, shadow-tls-version=3"

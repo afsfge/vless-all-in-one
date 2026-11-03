@@ -152,6 +152,9 @@ for proto in snell snell-v5 snell-v6; do
     mv "$CFG/$proto.conf" "$CFG/legacy-backup"
     get_ipv6() { echo 2001:db8::1; }
     gen_surge_sub > "$CFG/dual-sub.conf"
+    for sub in "$CFG/sub.conf" "$CFG/dual-sub.conf"; do
+        [[ $(grep ' = snell,' "$sub" | grep -Ec ', tfo=true(,|$)') -eq $(grep -c ' = snell,' "$sub") ]]
+    done
     expected="🇺🇸S$version-3003-v4-on, 🇺🇸S$version-3001-v4-off, 🇺🇸S$version-3002-v4-unknown, 🇺🇸S$version-3003-v6-on, 🇺🇸S$version-3001-v6-off, 🇺🇸S$version-3002-v6-unknown"
     grep -Fxq "Proxy = select, $expected" "$CFG/dual-sub.conf"
     get_ipv6() { :; }
