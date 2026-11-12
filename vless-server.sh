@@ -1,6 +1,6 @@
 #!/bin/bash 
 #═══════════════════════════════════════════════════════════════════════════════
-#  多协议代理一键部署脚本 v3.7.19 [服务端]
+#  多协议代理一键部署脚本 v3.7.20 [服务端]
 #  
 #  架构升级:
 #    • Xray 核心: 处理 TCP/TLS 协议 (VLESS/VMess/Trojan/SOCKS/SS2022)
@@ -17,7 +17,7 @@
 #  项目地址: https://github.com/afsfge/vless-all-in-one
 #═══════════════════════════════════════════════════════════════════════════════
 
-readonly VERSION="3.7.19"
+readonly VERSION="3.7.20"
 readonly AUTHOR="afsfge"
 readonly REPO_URL="https://github.com/afsfge/vless-all-in-one"
 readonly SCRIPT_REPO="afsfge/vless-all-in-one"
@@ -15397,6 +15397,38 @@ gen_surge_sub() {
             local _ip="${server_ip#[}"; _ip="${_ip%]}"
 
             case "$protocol" in
+                vless)
+                    # Surge supports REALITY, but not VLESS Encryption or XHTTP.
+                    local security_mode=$(jq -r '.security_mode // "reality"' <<< "$cfg")
+                    local encryption=$(jq -r '.encryption // "none"' <<< "$cfg")
+                    [[ "$security_mode" == reality && "$encryption" == none ]] || continue
+                    local public_key=$(jq -r '.public_key // empty' <<< "$cfg")
+                    local short_id=$(jq -r '.short_id // empty' <<< "$cfg")
+                    [[ -n "$uuid" && -n "$public_key" && -n "$sni" && -n "$port" ]] || continue
+                    name+="-$port"
+                    proxy="$name = vless, $_ip, $port, username=$uuid, flow=xtls-rprx-vision, sni=$sni, reality-public-key=$public_key, reality-short-id=$short_id"
+                    ;;
+                vless-vision)
+                    [[ -n "$uuid" && -n "$sni" && -n "$port" ]] || continue
+                    name+="-$port"
+                    proxy="$name = vless, $_ip, $port, username=$uuid, flow=xtls-rprx-vision, tls=true, sni=$sni, skip-cert-verify=true"
+                    ;;
+                vless-ws)
+                    [[ -n "$uuid" && -n "$sni" && -n "$port" ]] || continue
+                    local path=$(jq -r '.path // "/"' <<< "$cfg")
+                    local actual_port=$(_get_master_port "$port")
+                    # Use the public TLS listener when WS is a fallback child.
+                    name+="-$port"
+                    proxy="$name = vless, $_ip, $actual_port, username=$uuid, ws=true, ws-path=$path, ws-headers=Host:$sni, tls=true, sni=$sni, skip-cert-verify=true"
+                    ;;
+                vless-ws-notls)
+                    [[ -n "$uuid" && -n "$port" ]] || continue
+                    local path=$(jq -r '.path // "/"' <<< "$cfg")
+                    local host=$(jq -r '.host // empty' <<< "$cfg")
+                    name+="-$port"
+                    proxy="$name = vless, $_ip, $port, username=$uuid, ws=true, ws-path=$path"
+                    [[ -n "$host" ]] && proxy+=", ws-headers=Host:$host"
+                    ;;
                 trojan)
                     [[ -n "$_ip" ]] && proxy="$name = trojan, $_ip, $port, password=$password, sni=$sni, skip-cert-verify=true"
                     ;;

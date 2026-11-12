@@ -13,3 +13,17 @@ wget -O vless-server.sh https://raw.githubusercontent.com/afsfge/vless-all-in-on
 ```bash
 bash <(wget -qO- https://raw.githubusercontent.com/afsfge/vless-all-in-one/main/init-server.sh)
 ```
+
+## Surge VLESS subscriptions
+
+Requires Surge iOS 6.0.0+ or Mac 6.12.0+. Generated subscriptions now include
+REALITY + Vision, TLS + Vision, WebSocket + TLS (including the public fallback
+port), and plain WebSocket VLESS nodes. Names include the configured port to
+avoid collisions. XHTTP and VLESS Encryption remain excluded. TLS nodes retain
+the existing share-link certificate-verification behavior; REALITY uses its
+public key and short ID. Regenerate server subscriptions after updating the
+script, then refresh Surge.
+
+Specification: https://manual.nssurge.com/policies/vless.html
+
+Test: `python3 tests/test_surge_vless.py` (Bash 4+, jq).

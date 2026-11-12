@@ -27,3 +27,15 @@ BASH_BIN=/usr/local/bin/bash python3 tests/test_snell_instances.py
 测试使用临时目录和模拟服务管理命令，不安装服务或连接生产服务器。
 
 Surge 订阅按 IPv4 入口、IPv6 入口分组，各组内 Snell v6/v5/v4 优先；同一普通 Snell 协议内按 `on → off → auto/unknown` 排列，相同状态保留实例原顺序。节点定义与策略组使用相同顺序。
+
+## Surge VLESS 订阅
+
+Surge iOS 6.0.0+ / Mac 6.12.0+ 支持 VLESS。订阅现输出脚本中的 REALITY + Vision、TLS + Vision、WebSocket + TLS 和无 TLS WebSocket 节点；WS 回落子节点使用主协议对外 TLS 端口。VLESS 节点名附加配置端口，区分多实例及 REALITY / TLS Vision 同名节点。
+
+XHTTP 和 VLESS Encryption 仍不输出，避免生成 Surge 不支持的节点；脚本没有 gRPC 安装类型，因此本次不增加 gRPC 节点。TLS 节点沿用现有分享链接的 `skip-cert-verify=true`（兼容脚本的自签证书），REALITY 使用公钥和 short ID 校验，不添加跳过证书校验参数。
+
+更新脚本后，在订阅管理中重新生成订阅，再刷新 Surge。旧版 Surge 不支持新增 VLESS 节点，需先升级客户端。
+
+规范：https://manual.nssurge.com/policies/vless.html
+
+回归测试：`python3 tests/test_surge_vless.py`（Bash 4+、jq）。覆盖 IPv4/IPv6、无 IPv6 订阅、多实例、WS 回落端口、无 TLS WS 和不支持/不完整配置过滤。
