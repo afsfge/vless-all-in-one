@@ -18,8 +18,8 @@ bash <(wget -qO- https://raw.githubusercontent.com/afsfge/vless-all-in-one/main/
 
 Requires Surge iOS 6.0.0+ or Mac 6.12.0+. Generated subscriptions now include
 REALITY + Vision, TLS + Vision, WebSocket + TLS (including the public fallback
-port), and plain WebSocket VLESS nodes. Names include the configured port to
-avoid collisions. XHTTP and VLESS Encryption remain excluded. TLS nodes retain
+port), and plain WebSocket VLESS nodes. Surge names use flag + protocol + configured port + v4/v6, e.g.
+`🇺🇸Vless-47018-v4`; ordinary Snell nodes retain their IPv6 setting suffix. XHTTP and VLESS Encryption remain excluded. TLS nodes retain
 the existing share-link certificate-verification behavior; REALITY uses its
 public key and short ID. Regenerate server subscriptions after updating the
 script, then refresh Surge.

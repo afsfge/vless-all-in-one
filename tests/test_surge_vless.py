@@ -31,7 +31,7 @@ fixture = {
     'vless-ws-notls': dict(base, port=10001, path='/plain', host='cdn.example.com'),
     'vless-xhttp': dict(base, port=10002, path='/xhttp'),
 }
-lib = '\n'.join(function(n) for n in ['gen_surge_sub', '_get_master_port', '_sub_proto_label', '_ip_type_label'])
+lib = '\n'.join(function(n) for n in ['gen_surge_sub', '_get_master_port', '_sub_proto_label', '_ip_type_label', '_country_flag'])
 with tempfile.TemporaryDirectory() as directory:
     path = Path(directory) / 'db.json'
     path.write_text(json.dumps(fixture))
@@ -41,7 +41,6 @@ get_installed_protocols() { jq -r 'keys[]' "$DB"; }
 get_ipv4() { echo 192.0.2.1; }
 get_ipv6() { echo 2001:db8::1; }
 get_ip_country() { echo US; }
-_country_prefix() { echo US-; }
 is_snell_protocol() { return 1; }
 db_exists() { [[ "$1" == xray ]] && jq -e --arg p "$2" 'has($p)' "$DB" >/dev/null; }
 db_get() { jq -c --arg p "$2" '.[$p]' "$DB"; }
@@ -59,6 +58,9 @@ db_get_field() { jq -r --arg p "$2" --arg f "$3" '.[$p][$f]' "$DB"; }
         return lines
     lines = render()
     assert len(lines) == 10, lines
+    assert all(re.match(r'^🇺🇸Vless(?:-WS)?-\d+-v[46] = ', l) for l in lines)
+    assert any(l.startswith('🇺🇸Vless-443-v4 = ') for l in lines)
+    assert any(l.startswith('🇺🇸Vless-443-v6 = ') for l in lines)
     v4 = render(True)
     assert len(v4) == 5 and all('2001:db8' not in l for l in v4)
     assert all('username='+base['uuid'] in l for l in lines)

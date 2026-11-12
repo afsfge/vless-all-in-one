@@ -30,7 +30,7 @@ Surge 订阅按 IPv4 入口、IPv6 入口分组，各组内 Snell v6/v5/v4 优�
 
 ## Surge VLESS 订阅
 
-Surge iOS 6.0.0+ / Mac 6.12.0+ 支持 VLESS。订阅现输出脚本中的 REALITY + Vision、TLS + Vision、WebSocket + TLS 和无 TLS WebSocket 节点；WS 回落子节点使用主协议对外 TLS 端口。VLESS 节点名附加配置端口，区分多实例及 REALITY / TLS Vision 同名节点。
+Surge iOS 6.0.0+ / Mac 6.12.0+ 支持 VLESS。订阅现输出脚本中的 REALITY + Vision、TLS + Vision、WebSocket + TLS 和无 TLS WebSocket 节点；WS 回落子节点使用主协议对外 TLS 端口。Surge 节点统一使用「国旗＋协议－配置端口－v4/v6」格式，例如 `🇺🇸Vless-47018-v4`；普通 Snell 保留末尾的 IPv6 配置标识，如 `🇺🇸S6-21279-v4-off`。不重复显示国家代码。
 
 XHTTP 和 VLESS Encryption 仍不输出，避免生成 Surge 不支持的节点；脚本没有 gRPC 安装类型，因此本次不增加 gRPC 节点。TLS 节点沿用现有分享链接的 `skip-cert-verify=true`（兼容脚本的自签证书），REALITY 使用公钥和 short ID 校验，不添加跳过证书校验参数。
 

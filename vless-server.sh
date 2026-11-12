@@ -1,6 +1,6 @@
 #!/bin/bash 
 #═══════════════════════════════════════════════════════════════════════════════
-#  多协议代理一键部署脚本 v3.7.20 [服务端]
+#  多协议代理一键部署脚本 v3.7.21 [服务端]
 #  
 #  架构升级:
 #    • Xray 核心: 处理 TCP/TLS 协议 (VLESS/VMess/Trojan/SOCKS/SS2022)
@@ -17,7 +17,7 @@
 #  项目地址: https://github.com/afsfge/vless-all-in-one
 #═══════════════════════════════════════════════════════════════════════════════
 
-readonly VERSION="3.7.20"
+readonly VERSION="3.7.21"
 readonly AUTHOR="afsfge"
 readonly REPO_URL="https://github.com/afsfge/vless-all-in-one"
 readonly SCRIPT_REPO="afsfge/vless-all-in-one"
@@ -15386,7 +15386,9 @@ gen_surge_sub() {
             local version=$(echo "$cfg" | jq -r '.version // empty')
             
             local stls_password=$(echo "$cfg" | jq -r '.stls_password // empty')
-            local name="$(_country_prefix "$country_code")$(_sub_proto_label $protocol)-$(_ip_type_label "$server_ip")"
+            local family=v4
+            [[ "$server_ip" == *:* ]] && family=v6
+            local name="$(_country_flag "$country_code")$(_sub_proto_label "$protocol")-$port-$family"
             if is_snell_protocol "$protocol"; then
                 local snell_version="${protocol#snell-v}"
                 [[ "$protocol" == snell ]] && snell_version=4
@@ -15405,12 +15407,10 @@ gen_surge_sub() {
                     local public_key=$(jq -r '.public_key // empty' <<< "$cfg")
                     local short_id=$(jq -r '.short_id // empty' <<< "$cfg")
                     [[ -n "$uuid" && -n "$public_key" && -n "$sni" && -n "$port" ]] || continue
-                    name+="-$port"
                     proxy="$name = vless, $_ip, $port, username=$uuid, flow=xtls-rprx-vision, sni=$sni, reality-public-key=$public_key, reality-short-id=$short_id"
                     ;;
                 vless-vision)
                     [[ -n "$uuid" && -n "$sni" && -n "$port" ]] || continue
-                    name+="-$port"
                     proxy="$name = vless, $_ip, $port, username=$uuid, flow=xtls-rprx-vision, tls=true, sni=$sni, skip-cert-verify=true"
                     ;;
                 vless-ws)
@@ -15418,14 +15418,12 @@ gen_surge_sub() {
                     local path=$(jq -r '.path // "/"' <<< "$cfg")
                     local actual_port=$(_get_master_port "$port")
                     # Use the public TLS listener when WS is a fallback child.
-                    name+="-$port"
                     proxy="$name = vless, $_ip, $actual_port, username=$uuid, ws=true, ws-path=$path, ws-headers=Host:$sni, tls=true, sni=$sni, skip-cert-verify=true"
                     ;;
                 vless-ws-notls)
                     [[ -n "$uuid" && -n "$port" ]] || continue
                     local path=$(jq -r '.path // "/"' <<< "$cfg")
                     local host=$(jq -r '.host // empty' <<< "$cfg")
-                    name+="-$port"
                     proxy="$name = vless, $_ip, $port, username=$uuid, ws=true, ws-path=$path"
                     [[ -n "$host" ]] && proxy+=", ws-headers=Host:$host"
                     ;;
